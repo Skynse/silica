@@ -1,0 +1,22 @@
+[package]
+name = "silica-frontend"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
+[dependencies.eframe]
+eframe = "0.23.0"
+
+[dependencies]
+bevy = {version =  "0.12.0"}
+bevy_egui = "0.23.0"
+silica_engine = { path = "../silica_engine" }
+
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.dev.package."*"]
+opt-level = 3

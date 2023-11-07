@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "silica_engine",
+    "silica_frontend",
+]
+
