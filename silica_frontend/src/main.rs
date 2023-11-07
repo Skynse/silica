@@ -27,13 +27,12 @@ fn main() {
     let world = World::new(WIDTH as i32, HEIGHT as i32);
 
     let app = App::new()
-        .add_systems(Update, update_world)
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         title: "Silica".to_string(),
-                        resolution: WindowResolution::new(WIDTH, HEIGHT),
+                        resolution: WindowResolution::new(1024., 600.),
                         present_mode: bevy::window::PresentMode::Fifo,
                         ..default()
                     }),
@@ -45,6 +44,7 @@ fn main() {
         .insert_resource(ClearColor(Color::rgb(0., 0., 0.)))
         .add_systems(Startup, setup)
         .add_systems(Update, ui_canvas)
+        .add_systems(Update, update_world)
         .add_plugins(input::InputPlugin)
         .run();
 }
@@ -65,11 +65,12 @@ pub fn update_world(
     }
     let (mut world, image_handle) = world.unwrap();
     world.world.tick();
+
     let image = images.get_mut(image_handle).unwrap();
     for x in 0..world.width() {
         for y in 0..world.height() {
             let idx = world.world.get_idx(x as i32, y as i32);
-            let particle = world.world.get_particle(x as i32, y as i32);
+            let particle = world.world.get_particle_mut(x as i32, y as i32);
             let bbp = 4;
             let idx = idx * bbp;
             let color = particle_to_color(particle.get_variant());

@@ -13,8 +13,15 @@ pub struct API<'a> {
 }
 
 impl<'a> API<'a> {
-    pub fn set(&mut self, x: i32, y: i32, particle: particle::Particle) {
-        let idx = (y * self.world.width + x) as usize;
+    pub fn set(&mut self, dx: i32, dy: i32, particle: particle::Particle) {
+        let nx = self.x + dx;
+        let ny = self.y + dy;
+
+        if nx < 0 || nx >= self.world.width - 1 || ny < 0 || ny >= self.world.height - 1 {
+            return;
+        }
+
+        let idx = self.world.get_idx(nx, ny);
         self.world.particles[idx] = particle;
     }
 
@@ -32,14 +39,30 @@ impl<'a> API<'a> {
         x
     }
 
+    pub fn swap(&mut self, dx: i32, dy: i32) {
+        let nx = self.x + dx;
+        let ny = self.y + dy;
+
+        if nx < 0 || nx >= self.world.width - 1 || ny < 0 || ny >= self.world.height - 1 {
+            return;
+        }
+
+        let idx = self.world.get_idx(self.x, self.y);
+        let nidx = self.world.get_idx(nx, ny);
+
+        let tmp = self.world.particles[idx];
+        self.world.particles[idx] = self.world.particles[nidx];
+        self.world.particles[nidx] = tmp;
+    }
+
     pub fn get(&mut self, dx: i32, dy: i32) -> Particle {
         let nx = self.x + dx;
         let ny = self.y + dy;
 
         if nx < 0 || nx >= self.world.width - 1 || ny < 0 || ny >= self.world.height - 1 {
-            return Particle::new(Variant::Empty, "empty", 0, 0);
+            return Particle::new(Variant::Empty, 0, 0);
         }
-        self.world.get_particle(nx, ny)
+        self.world.get(nx, ny)
     }
 }
 
@@ -59,8 +82,8 @@ mod tests {
             x: 0,
             y: 0,
         };
-        api.set(0, 0, Particle::new(Variant::Sand, "sand", 0, 0));
-        assert_eq!(api.get(0, 0).get_ident(), "sand");
+        api.set(0, 0, Particle::new(Variant::Sand, 0, 0));
+        assert_eq!(api.get(0, 0).get_variant(), Variant::Sand);
     }
 
     #[test]
@@ -71,8 +94,8 @@ mod tests {
             x: 0,
             y: 0,
         };
-        api.set(0, 0, Particle::new(Variant::Sand, "sand", 0, 0));
-        assert_eq!(api.get(0, 0).get_ident(), "sand");
+        api.set(0, 0, Particle::new(Variant::Sand, 0, 0));
+        assert_eq!(api.get(0, 0).get_variant(), Variant::Sand);
     }
 
     #[test]
@@ -83,9 +106,9 @@ mod tests {
             x: 0,
             y: 0,
         };
-        api.set(0, 0, Particle::new(Variant::Sand, "sand", 0, 0));
+        api.set(0, 0, Particle::new(Variant::Sand, 0, 0));
         api.reset();
-        assert_eq!(api.get(0, 0).get_ident(), "empty");
-        assert_eq!(api.get(1, 1).get_ident(), "empty");
+        assert_eq!(api.get(0, 0).get_variant(), Variant::Empty);
+        assert_eq!(api.get(1, 1).get_variant(), Variant::Empty);
     }
 }

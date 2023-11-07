@@ -1,7 +1,6 @@
 use crate::{api::API, particle::Particle};
-static EMPTY_CELL: Particle = Particle {
+pub static EMPTY_CELL: Particle = Particle {
     variant: Variant::Empty,
-    identifier: "empty",
     ra: 0,
     rb: 0,
 };
@@ -13,12 +12,8 @@ pub enum Variant {
     Sand = 2,
 }
 
-pub fn particle_name(particle: Particle) -> &'static str {
-    particle.identifier
-}
-
 impl Variant {
-    pub fn update(&mut self, particle: Particle, api: API) {
+    pub fn update(&self, particle: Particle, api: API) {
         // pass
         match self {
             Variant::Empty => (),

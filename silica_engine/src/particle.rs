@@ -4,32 +4,26 @@ use rand::Rng;
 #[derive(Clone, Copy, Debug)]
 pub struct Particle {
     pub variant: Variant,
-    pub identifier: &'static str,
     pub ra: u8,
     pub rb: u8,
 }
 
 impl Particle {
-    pub fn new(variant: Variant, identifier: &'static str, ra: u8, rb: u8) -> Particle {
+    pub fn new(variant: Variant, ra: u8, rb: u8) -> Particle {
         Particle {
             variant: variant,
-            identifier: identifier,
-            ra,
+            ra: 100 + rand::thread_rng().gen_range(0..2) * 50 as u8,
             rb,
         }
-    }
-
-    pub fn get_ident(&self) -> &'static str {
-        self.identifier
     }
 
     pub fn get_variant(&self) -> Variant {
         self.variant
     }
 
-    pub fn update(&mut self, particle: Particle, api: API) {
+    pub fn update(&self, api: API) {
         // pass
-        self.update(*self, api);
+        self.variant.update(*self, api);
     }
 }
 
