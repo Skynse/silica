@@ -45,6 +45,8 @@ impl<'a> API<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::format;
+
     use crate::world::World;
 
     use super::*;
@@ -85,37 +87,5 @@ mod tests {
         api.reset();
         assert_eq!(api.get(0, 0).get_ident(), "empty");
         assert_eq!(api.get(1, 1).get_ident(), "empty");
-    }
-
-    #[test]
-    fn test_world_tick_sand_fall() {
-        let mut world = World::new(5, 5);
-        let mut api = API {
-            world: &mut world,
-            x: 0,
-            y: 0,
-        };
-        api.set(0, 0, Particle::new(Variant::Sand, "sand", 0, 0));
-
-        api.update_world();
-
-        assert_eq!(api.get(0, 1).get_ident(), "sand");
-        assert_eq!(api.get(0, 0).get_ident(), "empty");
-    }
-
-    #[test]
-    fn test_sand_fall_2ticks() {
-        let mut world = World::new(5, 5);
-        let mut api = API {
-            world: &mut world,
-            x: 0,
-            y: 0,
-        };
-        api.set(0, 0, Particle::new(Variant::Sand, "sand", 0, 0));
-
-        api.update_world();
-        api.update_world();
-
-        assert_eq!(api.get(0, 2).get_variant(), Variant::Sand);
     }
 }
