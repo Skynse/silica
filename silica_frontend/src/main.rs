@@ -64,13 +64,15 @@ pub fn update_world(
         return;
     }
     let (mut world, image_handle) = world.unwrap();
-    world.world.tick();
+    if world.running {
+        world.world.tick();
+    }
 
     let image = images.get_mut(image_handle).unwrap();
     for x in 0..world.width() {
         for y in 0..world.height() {
             let idx = world.world.get_idx(x as i32, y as i32);
-            let particle = world.world.get_particle_mut(x as i32, y as i32);
+            let particle = world.world.get_particle(x as i32, y as i32);
             let bbp = 4;
             let idx = idx * bbp;
             let color = particle_to_color(particle.get_variant());

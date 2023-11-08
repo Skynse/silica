@@ -1,5 +1,12 @@
-use bevy::{input::mouse::MouseButtonInput, prelude::*, window::PrimaryWindow};
-use bevy_egui::EguiContexts;
+use bevy::{
+    input::{
+        keyboard::KeyboardInput,
+        mouse::{MouseButtonInput, MouseWheel},
+    },
+    prelude::*,
+    window::PrimaryWindow,
+};
+use bevy_egui::{egui::Key, EguiContexts};
 use silica_engine::world;
 
 use crate::gameworld::GameWorld;
@@ -9,7 +16,9 @@ pub struct InputPlugin;
 pub struct InputState {
     pub left_down: bool,
     pub right_down: bool,
+    pub ctrl_down: bool,
     pub position: Vec2,
+    pub paused: bool,
     pub world_position: Vec2,
 }
 impl Plugin for InputPlugin {
@@ -23,6 +32,8 @@ fn mouse_button_input(
     mut mouse: ResMut<InputState>,
     mut mouse_button_input_events: EventReader<MouseButtonInput>,
     mut cursor_moved_events: EventReader<CursorMoved>,
+    mut mouse_wheel_events: EventReader<MouseWheel>,
+    mut keyboard_input_events: EventReader<KeyboardInput>,
     mut world: Query<&mut GameWorld>,
     mut egui_context: EguiContexts,
     mut camera: Query<(&Camera, &mut Transform, &GlobalTransform)>,
@@ -31,6 +42,21 @@ fn mouse_button_input(
         match event.button {
             MouseButton::Left => mouse.left_down = event.state.is_pressed(),
             MouseButton::Right => mouse.right_down = event.state.is_pressed(),
+            _ => (),
+        }
+    }
+
+    for event in keyboard_input_events.read() {
+        match event.key_code {
+            Some(KeyCode::ControlLeft | KeyCode::ControlRight) => {
+                mouse.ctrl_down = event.state.is_pressed()
+            }
+
+            Some(KeyCode::Space) => {
+                if event.state.is_pressed() {
+                    mouse.paused = !mouse.paused;
+                }
+            }
             _ => (),
         }
     }
@@ -47,6 +73,11 @@ fn mouse_button_input(
         mouse.right_down = false;
         return;
     }
+    let mut wheel_y = 0.0;
+
+    for event in mouse_wheel_events.read() {
+        wheel_y += event.y;
+    }
 
     let world = world.get_single_mut();
 
@@ -61,6 +92,15 @@ fn mouse_button_input(
         .unwrap()
         .origin;
 
+    if wheel_y != 0.0 {
+        let zoom = 1.0 + wheel_y / 10.0;
+        transform.scale = Vec3::new(
+            transform.scale.x * zoom,
+            transform.scale.y * zoom,
+            transform.scale.z,
+        );
+    }
+
     mouse.world_position = Vec2::new(
         world_pos.x + (world.width() / 2) as f32,
         (world.height() / 2) as f32 - world_pos.y,
@@ -69,19 +109,27 @@ fn mouse_button_input(
     let x = mouse.world_position.x;
     let y = mouse.world_position.y;
     if x > 0.0 && x < world.width() as f32 && y > 0.0 && y < world.height() as f32 {
-        if mouse.left_down {
-            world.world.set_particle(
-                x.floor() as i32,
-                y.floor() as i32,
-                silica_engine::variant::Variant::Sand,
-            );
-        }
         if mouse.right_down {
             world.world.set_particle(
                 x.floor() as i32,
                 y.floor() as i32,
                 silica_engine::variant::Variant::Empty,
             );
+        }
+        if mouse.left_down {
+            // add particles in a circle around the mouse
+            let radius = 5;
+            for x in -radius..radius {
+                for y in -radius..radius {
+                    if x * x + y * y < radius * radius {
+                        world.world.set_particle(
+                            (x as f32 + mouse.world_position.x).floor() as i32,
+                            (y as f32 + mouse.world_position.y).floor() as i32,
+                            silica_engine::variant::Variant::Sand,
+                        );
+                    }
+                }
+            }
         }
     }
 }

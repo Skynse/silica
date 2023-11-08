@@ -24,19 +24,18 @@ impl Default for World {
 impl World {
     pub fn tick(&mut self) {
         if self.running {
-            for y in 1..(self.height - 1) {
-                for x in 1..(self.width - 1) {
-                    let particle = World::get_particle(&self, x, y);
-                    update_particle(particle, API { world: self, x, y });
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    let particle = self.get(x, y);
+                    particle.update(API { world: self, x, y });
                 }
-            }
-
-            fn update_particle(particle: Particle, api: API) {
-                particle.update(api)
             }
         }
     }
 
+    fn update_particle(particle: Particle, api: API) {
+        particle.update(api)
+    }
     pub fn new(width: i32, height: i32) -> World {
         let mut particles = Vec::new();
         for _ in 0..width * height {
