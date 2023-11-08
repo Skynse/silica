@@ -87,7 +87,7 @@ pub fn update_world(
 
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.spawn(Camera2dBundle::default());
-    spawn_world(commands, images.as_mut(), WIDTH as u32, HEIGHT as u32);
+    spawn_world(commands, images.as_mut(), 255, 255);
 }
 
 fn spawn_world(mut commands: Commands, images: &mut Assets<Image>, width: u32, height: u32) {

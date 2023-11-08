@@ -12,14 +12,13 @@ pub struct GameWorld {
 impl GameWorld {
     pub fn new(width: f32, height: f32) -> GameWorld {
         let mut world = World::new(width as i32, height as i32);
-        // draw walls
-        for x in 0..width as usize - 1 {
-            world.set_particle(x as i32, 0, Variant::Wall);
-            world.set_particle(x as i32, height as i32 - 1, Variant::Wall);
-        }
-        for y in 0..height as usize - 1 {
-            world.set_particle(0, y as i32, Variant::Wall);
-            world.set_particle(width as i32 - 1, y as i32, Variant::Wall);
+        // draw walls with thickness of 2px
+        for x in 0..width as i32 {
+            for y in 0..height as i32 {
+                if x < 2 || x > width as i32 - 2 || y < 2 || y > height as i32 - 2 {
+                    world.set_particle(x, y, Variant::Wall);
+                }
+            }
         }
 
         GameWorld {

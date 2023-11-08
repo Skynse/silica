@@ -34,8 +34,13 @@ impl<'a> API<'a> {
     }
 
     pub fn rand_dir(&mut self) -> i32 {
+        let i = self.rand_int(1000);
+        (i % 3) - 1
+    }
+
+    pub fn rand_int(&mut self, n: i32) -> i32 {
         let mut rng = rand::thread_rng();
-        let x = rng.gen_range(-1..1);
+        let x = rng.gen_range(0..n);
         x
     }
 

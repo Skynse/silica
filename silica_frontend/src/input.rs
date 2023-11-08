@@ -19,7 +19,9 @@ pub struct InputState {
     pub ctrl_down: bool,
     pub position: Vec2,
     pub paused: bool,
+    pub middle_down: bool,
     pub world_position: Vec2,
+    pub drag_movement: Vec2,
 }
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
@@ -42,6 +44,7 @@ fn mouse_button_input(
         match event.button {
             MouseButton::Left => mouse.left_down = event.state.is_pressed(),
             MouseButton::Right => mouse.right_down = event.state.is_pressed(),
+            MouseButton::Middle => mouse.middle_down = event.state.is_pressed(),
             _ => (),
         }
     }
@@ -66,6 +69,7 @@ fn mouse_button_input(
     for event in cursor_moved_events.read() {
         mouse.position = event.position;
     }
+    mouse.drag_movement = mouse.position - last_position;
 
     let ctx = egui_context.ctx_mut();
     if ctx.wants_pointer_input() || ctx.is_pointer_over_area() || ctx.is_using_pointer() {
@@ -89,16 +93,29 @@ fn mouse_button_input(
     let (camera, mut transform, global_transform) = camera.single_mut();
     let world_pos = camera
         .viewport_to_world(global_transform, mouse.position)
-        .unwrap()
+        .unwrap_or(Ray {
+            origin: Vec3::ZERO,
+            direction: Vec3::ZERO,
+        })
         .origin;
 
-    if wheel_y != 0.0 {
-        let zoom = 1.0 + wheel_y / 10.0;
-        transform.scale = Vec3::new(
-            transform.scale.x * zoom,
-            transform.scale.y * zoom,
-            transform.scale.z,
-        );
+    // Zoom camera using mouse wheel
+    if wheel_y > 0.0 {
+        transform.scale.x = (transform.scale.x * 0.9).clamp(0.1, 1.0);
+        transform.scale.y = (transform.scale.y * 0.9).clamp(0.1, 1.0);
+    } else if wheel_y < 0.0 {
+        transform.scale.x = (transform.scale.x * 1.1).clamp(0.1, 1.0);
+        transform.scale.y = (transform.scale.y * 1.1).clamp(0.1, 1.0);
+    }
+
+    let half_width = (world.width() / 2) as f32;
+    let half_height = (world.height() / 2) as f32;
+    if mouse.middle_down {
+        transform.translation.x -= mouse.drag_movement.x * transform.scale.x;
+        transform.translation.y = mouse.drag_movement.y * transform.scale.y;
+
+        transform.translation.x = transform.translation.x.clamp(-half_width, half_width);
+        transform.translation.y = transform.translation.y.clamp(-half_height, half_height);
     }
 
     mouse.world_position = Vec2::new(
@@ -125,7 +142,7 @@ fn mouse_button_input(
                         world.world.set_particle(
                             (x as f32 + mouse.world_position.x).floor() as i32,
                             (y as f32 + mouse.world_position.y).floor() as i32,
-                            silica_engine::variant::Variant::Sand,
+                            silica_engine::variant::Variant::Water,
                         );
                     }
                 }

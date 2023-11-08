@@ -24,17 +24,13 @@ impl Default for World {
 impl World {
     pub fn tick(&mut self) {
         if self.running {
-            for y in 0..self.height {
-                for x in 0..self.width {
+            for x in 0..self.width {
+                for y in 0..self.height {
                     let particle = self.get(x, y);
                     particle.update(API { world: self, x, y });
                 }
             }
         }
-    }
-
-    fn update_particle(particle: Particle, api: API) {
-        particle.update(api)
     }
     pub fn new(width: i32, height: i32) -> World {
         let mut particles = Vec::new();
@@ -96,6 +92,9 @@ impl World {
 
     pub fn set_particle(&mut self, x: i32, y: i32, variant: Variant) {
         let idx = self.get_idx(x, y);
+        if idx >= self.particles.len() {
+            return;
+        }
         self.particles[idx] = Particle::new(variant, 0, 0);
     }
 
