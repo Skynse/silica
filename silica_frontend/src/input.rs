@@ -7,9 +7,9 @@ use bevy::{
     window::PrimaryWindow,
 };
 use bevy_egui::{egui::Key, EguiContexts};
-use silica_engine::world;
+use silica_engine::{variant_type::VARIANTS, world};
 
-use crate::gameworld::GameWorld;
+use crate::{gameworld::GameWorld, tools::Tools};
 
 pub struct InputPlugin;
 #[derive(Default, Resource)]
@@ -37,6 +37,7 @@ fn mouse_button_input(
     mut mouse_wheel_events: EventReader<MouseWheel>,
     mut keyboard_input_events: EventReader<KeyboardInput>,
     mut world: Query<&mut GameWorld>,
+    mut tools: ResMut<Tools>,
     mut egui_context: EguiContexts,
     mut camera: Query<(&Camera, &mut Transform, &GlobalTransform)>,
 ) {
@@ -100,12 +101,22 @@ fn mouse_button_input(
         .origin;
 
     // Zoom camera using mouse wheel
-    if wheel_y > 0.0 {
+    if wheel_y > 0.0 && mouse.ctrl_down {
         transform.scale.x = (transform.scale.x * 0.9).clamp(0.1, 1.0);
         transform.scale.y = (transform.scale.y * 0.9).clamp(0.1, 1.0);
     } else if wheel_y < 0.0 {
         transform.scale.x = (transform.scale.x * 1.1).clamp(0.1, 1.0);
         transform.scale.y = (transform.scale.y * 1.1).clamp(0.1, 1.0);
+    }
+
+    if wheel_y > 0.0 {
+        tools.variant = VARIANTS[(VARIANTS
+            .iter()
+            .position(|x| x.source_variant == tools.variant)
+            .unwrap()
+            + 1)
+            % VARIANTS.len()]
+        .source_variant;
     }
 
     let half_width = (world.width() / 2) as f32;
@@ -135,18 +146,7 @@ fn mouse_button_input(
         }
         if mouse.left_down {
             // add particles in a circle around the mouse
-            let radius = 5;
-            for x in -radius..radius {
-                for y in -radius..radius {
-                    if x * x + y * y < radius * radius {
-                        world.world.set_particle(
-                            (x as f32 + mouse.world_position.x).floor() as i32,
-                            (y as f32 + mouse.world_position.y).floor() as i32,
-                            silica_engine::variant::Variant::Water,
-                        );
-                    }
-                }
-            }
+            tools.paint(&mut world, x.floor() as usize, y.floor() as usize);
         }
     }
 }

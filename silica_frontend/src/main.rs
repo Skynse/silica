@@ -1,5 +1,6 @@
 mod gameworld;
 mod input;
+mod tools;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::window::WindowResolution;
@@ -9,6 +10,7 @@ use eframe::epaint::image;
 use gameworld::GameWorld;
 use silica_engine::{api::API, world::World};
 use silica_engine::{particle::particle_to_color, particle::Particle, variant::Variant};
+use tools::Tools;
 
 static WIDTH: f32 = 700.;
 static HEIGHT: f32 = 700.;
@@ -45,6 +47,10 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Update, ui_canvas)
         .add_systems(Update, update_world)
+        .insert_resource(Tools {
+            variant: Variant::Sand,
+            tool_size: 10,
+        })
         .add_plugins(input::InputPlugin)
         .run();
 }
