@@ -1,10 +1,13 @@
 mod gameworld;
 mod input;
 mod tools;
+mod ui;
+
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::window::WindowResolution;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use ui::*;
 
 use eframe::epaint::image;
 use gameworld::GameWorld;
@@ -52,6 +55,7 @@ fn main() {
             tool_size: 10,
         })
         .add_plugins(input::InputPlugin)
+        .add_plugins(UIPlugin)
         .run();
 }
 

@@ -70,7 +70,11 @@ fn mouse_button_input(
     for event in cursor_moved_events.read() {
         mouse.position = event.position;
     }
-    mouse.drag_movement = mouse.position - last_position;
+    mouse.drag_movement = if mouse.middle_down {
+        mouse.position - last_position
+    } else {
+        Vec2::ZERO
+    };
 
     let ctx = egui_context.ctx_mut();
     if ctx.wants_pointer_input() || ctx.is_pointer_over_area() || ctx.is_using_pointer() {
@@ -90,6 +94,7 @@ fn mouse_button_input(
         return;
     }
     let mut world = world.unwrap();
+    world.running = !mouse.paused;
 
     let (camera, mut transform, global_transform) = camera.single_mut();
     let world_pos = camera
@@ -138,11 +143,13 @@ fn mouse_button_input(
     let y = mouse.world_position.y;
     if x > 0.0 && x < world.width() as f32 && y > 0.0 && y < world.height() as f32 {
         if mouse.right_down {
-            world.world.set_particle(
-                x.floor() as i32,
-                y.floor() as i32,
+            // remove particles in a circle around the mouse
+            tools.paint_specific_variant(
+                &mut world,
+                x.floor() as usize,
+                y.floor() as usize,
                 silica_engine::variant::Variant::Empty,
-            );
+            )
         }
         if mouse.left_down {
             // add particles in a circle around the mouse

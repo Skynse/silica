@@ -38,6 +38,17 @@ impl GameWorld {
         self.width
     }
 
+    pub fn reset(&mut self) {
+        // clear pixels but retain walls
+        for x in 0..self.width {
+            for y in 0..self.height {
+                if self.world.get_particle(x as i32, y as i32).variant != Variant::Wall {
+                    self.world.set_particle(x as i32, y as i32, Variant::Empty);
+                }
+            }
+        }
+    }
+
     pub fn height(&self) -> usize {
         self.height
     }

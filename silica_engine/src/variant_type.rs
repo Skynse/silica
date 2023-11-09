@@ -1,5 +1,5 @@
 use crate::variant::Variant;
-pub const VARIANT_COUNT: usize = 4;
+pub const VARIANT_COUNT: usize = 5;
 
 #[derive(PartialEq, Eq)]
 pub struct VariantType {
@@ -11,6 +11,7 @@ pub struct VariantType {
 
 #[derive(PartialEq, Eq)]
 pub enum VariantProperty {
+    UnErasable,
     Indestructible,
     Solid,
     Powder,
@@ -36,7 +37,7 @@ pub static VARIANTS: [VariantType; VARIANT_COUNT] = [
         weight: 0,
         color: (0x7F, 0x7F, 0x7F),
         source_variant: Variant::Wall,
-        variant_property: VariantProperty::Solid,
+        variant_property: VariantProperty::UnErasable,
     },
     // 2 Sand
     VariantType {
@@ -51,5 +52,12 @@ pub static VARIANTS: [VariantType; VARIANT_COUNT] = [
         color: (0x00, 0x00, 0xFF),
         source_variant: Variant::Water,
         variant_property: VariantProperty::Liquid,
+    },
+    // 4 Fire
+    VariantType {
+        weight: 0,
+        color: (0xFF, 0x00, 0x00),
+        source_variant: Variant::Fire,
+        variant_property: VariantProperty::Gas,
     },
 ];
