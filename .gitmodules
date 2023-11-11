@@ -1,0 +1,3 @@
+[submodule "silica-engine"]
+	path = silica-engine
+	url = https://github.com/skynse/silica-engine

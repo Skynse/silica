@@ -114,16 +114,6 @@ fn mouse_button_input(
         transform.scale.y = (transform.scale.y * 1.1).clamp(0.1, 1.0);
     }
 
-    if wheel_y > 0.0 {
-        tools.variant = VARIANTS[(VARIANTS
-            .iter()
-            .position(|x| x.source_variant == tools.variant)
-            .unwrap()
-            + 1)
-            % VARIANTS.len()]
-        .source_variant;
-    }
-
     let half_width = (world.width() / 2) as f32;
     let half_height = (world.height() / 2) as f32;
     if mouse.middle_down {

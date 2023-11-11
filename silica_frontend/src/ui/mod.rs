@@ -5,7 +5,10 @@ use bevy_egui::{
 };
 use silica_engine::variant::Variant;
 
-use crate::{gameworld::GameWorld, tools::Tools};
+use crate::{
+    gameworld::GameWorld,
+    tools::{self, Tools},
+};
 
 pub struct UIPlugin;
 impl Plugin for UIPlugin {
@@ -27,7 +30,7 @@ pub struct VariantOption {
     name: &'static str,
 }
 
-static VARIANT_OPTIONS: [VariantOption; 4] = [
+static VARIANT_OPTIONS: [VariantOption; 5] = [
     VariantOption {
         variant: Variant::Sand,
         name: "Sand",
@@ -44,6 +47,10 @@ static VARIANT_OPTIONS: [VariantOption; 4] = [
         variant: Variant::Fire,
         name: "Fire",
     },
+    VariantOption {
+        variant: Variant::GOL,
+        name: "GOL",
+    },
 ];
 
 pub fn side_panel(
@@ -56,6 +63,7 @@ pub fn side_panel(
 ) {
     let ctx = contexts.ctx_mut();
     let mut world = world.single_mut();
+    let mut tools = tools.as_mut();
     let left: f32 = egui::SidePanel::left("left_panel")
         .resizable(true)
         .show(ctx, |ui| {
@@ -83,6 +91,11 @@ pub fn side_panel(
                     tools.variant = variant_option.variant;
                 }
             }
+
+            ui.separator();
+
+            ui.label("Tools");
+            ui.add(egui::Slider::new(&mut tools.tool_size, 0..=10).text("Tool Size"));
         })
         .response
         .rect

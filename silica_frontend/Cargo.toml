@@ -12,7 +12,7 @@ eframe = "0.23.0"
 [dependencies]
 bevy = {version =  "0.12.0"}
 bevy_egui = "0.23.0"
-silica_engine = { path = "../silica_engine" }
+silica_engine = { path = "../silica-engine/silica_engine" }
 
 [profile.dev]
 opt-level = 1
