@@ -1,3 +1,4 @@
+use macroquad::miniquad::window::screen_size;
 use macroquad::prelude::*;
 use macroquad::ui::{hash, root_ui, widgets};
 use silica_engine::prelude::*;
@@ -5,16 +6,14 @@ use std::convert::TryInto;
 
 #[macroquad::main("BasicShapes")]
 async fn main() {
-    let w: usize = screen_width() as usize;
-    let h: usize = screen_height() as usize;
+    let w: usize = 611;
+    let h: usize = 383;
     let mut image = Image::gen_image_color(w as u16, h as u16, BLACK);
     let mut world: World = World::new(w.clone(), h.clone());
-    let window_width = screen_width();
-    let window_height = screen_height();
-
-    let scale_x = w as f32 / window_width;
-    let scale_y = h as f32 / window_height;
     let texture = Texture2D::from_image(&image);
+
+    let scale_x = screen_width() / w as f32;
+    let scale_y = screen_height() / h as f32;
 
     draw_walls(&mut world);
 
@@ -24,8 +23,8 @@ async fn main() {
         let w = image.width();
         let h = image.height();
 
-        for x in 0..w as u32 / 2 {
-            for y in 0..h as u32 / 2 {
+        for x in 0..w as u32 {
+            for y in 0..h as u32 {
                 let particle = world.get_particle(x as i32, y as i32);
                 let color = particle_to_color(particle.variant);
                 let c = color_u8!(color.0, color.1, color.2, 255);
@@ -38,9 +37,10 @@ async fn main() {
         let (mouse_x, mouse_y) = mouse_position();
 
         if is_mouse_button_down(MouseButton::Left) {
+            // use screen coords mapped to world coords
             world.set_particle(
-                (mouse_x * scale_x) as i32,
-                (mouse_y * scale_y) as i32,
+                mouse_x as i32 / screen_width() as i32 * w as i32,
+                mouse_y as i32 / screen_height() as i32 * h as i32,
                 Variant::Sand,
             );
         }
@@ -59,7 +59,7 @@ async fn main() {
             0.,
             WHITE,
             DrawTextureParams {
-                dest_size: Some(vec2(screen_width(), screen_height() * scale_y)),
+                dest_size: Some(vec2(screen_width() * scale_x, screen_height() * scale_y)),
                 source: Some(Rect::new(0.0, 0.0, w as f32, h as f32)),
                 ..Default::default()
             },
