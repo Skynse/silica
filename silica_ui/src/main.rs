@@ -1,6 +1,7 @@
 use macroquad::miniquad::window::{screen_size, show_keyboard};
 use macroquad::prelude::*;
 use macroquad::ui::{hash, root_ui, widgets, Skin};
+use rayon::prelude::*;
 use silica_engine::group::ElementManager;
 use silica_engine::{prelude::*, world};
 use std::convert::TryInto;
@@ -10,15 +11,18 @@ fn window_conf() -> Conf {
     Conf {
         window_title: "Silica".to_owned(),
         window_width: 1390,
-        window_height: 1020,
+        window_height: 900,
+        fullscreen: false,
+
         window_resizable: false,
         ..Default::default()
     }
 }
-
+#[derive(Clone, Copy, Debug)]
 struct GameProperties {
     tool_radius: f32,
     tool_type: Variant,
+    hovering_over: Variant,
     selected_group_idx: usize,
 }
 
@@ -38,11 +42,13 @@ async fn main() {
     let mut image = Image::gen_image_color(w as u16, h as u16, BLACK);
     let mut world: World = World::new(w as i32, h as i32);
     let texture = Texture2D::from_image(&image);
+    texture.set_filter(FilterMode::Nearest);
 
-    let game_properties = GameProperties {
+    let mut game_properties = GameProperties {
         tool_radius: 10.0,
         tool_type: Variant::Sand,
         selected_group_idx: 0,
+        hovering_over: Variant::Empty,
     };
     let mut world_info = WorldInfo {
         fps: 0,
@@ -62,16 +68,6 @@ async fn main() {
         let w = image.width();
         let h = image.height();
 
-        for x in 0..w as u32 {
-            for y in 0..h as u32 {
-                let particle = world.get_particle(x as i32, y as i32);
-                let color = particle_to_color(particle.variant);
-                let c = color_u8!(color.0, color.1, color.2, 255);
-
-                image.set_pixel(x, y, c);
-            }
-        }
-
         let mouse_pos = mouse_position();
         let mouse_x = mouse_pos.0 as usize;
         let mouse_y = mouse_pos.1 as usize;
@@ -81,9 +77,41 @@ async fn main() {
         let mouse_x_world = (mouse_x as f32 / screen_w * w as f32) as usize;
         let mouse_y_world = (mouse_y as f32 / screen_h * h as f32) as usize;
 
-        let mouse_wheel = mouse_wheel().1;
-        world_info.properties.tool_radius += mouse_wheel * 4.;
+        /*
+        for x in 0..w as u32 {
+            for y in 0..h as u32 {
+                let particle = world.get_particle(x as i32, y as i32);
+                let color = particle_to_color(particle.variant);
+                let c = color_u8!(color.0, color.1, color.2, 255);
 
+                image.set_pixel(x, y, c);
+            }
+        }
+        */
+
+        // use parallel iterator to speed up rendering
+        /* */
+        image
+            .get_image_data_mut()
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(idx, pixel)| {
+                let x = idx % w as usize;
+                let y = idx / w as usize;
+                let particle = world.get_particle(x as i32, y as i32);
+                let color = particle_to_color(particle.variant);
+                let c = color_u8!(color.0, color.1, color.2, 255);
+                *pixel = [color.0, color.1, color.2, 255];
+            });
+
+        let mouse_wheel = mouse_wheel().1;
+        //world_info.properties.tool_radius += mouse_wheel;
+        // use logarithmic scale for radius change
+        if mouse_wheel > 0.0 {
+            world_info.properties.tool_radius *= 1.1;
+        } else if mouse_wheel < 0.0 {
+            world_info.properties.tool_radius /= 1.1;
+        }
         // handle input
         if is_mouse_button_down(MouseButton::Left)
             && mouse_y < screen_h as usize - 60
@@ -123,6 +151,8 @@ async fn main() {
             );
         }
 
+        // if z is pressed, draw a zoomed in version of the world at the mouse position inside a rect
+
         if is_key_pressed(KeyCode::R) {
             world.reset();
         }
@@ -130,6 +160,10 @@ async fn main() {
         if is_key_pressed(KeyCode::Space) {
             world.running = !world.running;
         }
+
+        game_properties.hovering_over = world
+            .get_particle(mouse_x_world as i32, mouse_y_world as i32)
+            .variant;
 
         texture.update(&image);
         draw_texture_ex(
@@ -140,6 +174,7 @@ async fn main() {
             DrawTextureParams {
                 dest_size: Some(vec2(screen_width() - 200., screen_height() - 60.)),
                 source: Some(Rect::new(0.0, 0.0, w as f32, h as f32)),
+
                 ..Default::default()
             },
         );
@@ -249,7 +284,7 @@ fn draw_top_panel(world_info: &mut WorldInfo) {
 
     // draw currently selected tool to the right
     draw_text(
-        &format!("Tool: {:?}", world_info.properties.tool_type),
+        &format!("{:?}", world_info.properties.hovering_over),
         screen_width() - 200.0,
         20.0,
         30.0,
@@ -292,8 +327,8 @@ fn erase_radius(world: &mut World, x: i32, y: i32, radius: i32) {
 }
 
 fn register_element_groups(manager: &ElementManager) {
-    manager.register_group("Powders", vec![Variant::Sand]);
-    manager.register_group("Liquids", vec![Variant::Water]);
+    manager.register_group("Powders", vec![Variant::Sand, Variant::Salt]);
+    manager.register_group("Liquids", vec![Variant::Water, Variant::SaltWater]);
     manager.register_group("Gases", vec![Variant::Smoke]);
     manager.register_group("Explosives", vec![Variant::Fire]);
 }
