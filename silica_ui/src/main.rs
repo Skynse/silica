@@ -1,11 +1,11 @@
 use macroquad::miniquad::window::{screen_size, show_keyboard};
 use macroquad::prelude::*;
 use macroquad::ui::{hash, root_ui, widgets, Skin};
+
+use ::rand::Rng;
 use rayon::prelude::*;
 use silica_engine::group::ElementManager;
 use silica_engine::{prelude::*, world};
-use std::convert::TryInto;
-use std::ops::AddAssign;
 
 fn window_conf() -> Conf {
     Conf {
@@ -37,8 +37,8 @@ struct WorldInfo {
 async fn main() {
     // Initialization
 
-    let w: usize = 611;
-    let h: usize = 383;
+    let w: usize = 311;
+    let h: usize = 183;
     let mut image = Image::gen_image_color(w as u16, h as u16, BLACK);
     let mut world: World = World::new(w as i32, h as i32);
     let texture = Texture2D::from_image(&image);
@@ -56,6 +56,7 @@ async fn main() {
         world_width: w,
         world_height: h,
     };
+
     draw_walls(&mut world);
 
     let element_manager: ElementManager = ElementManager::new();
@@ -64,7 +65,6 @@ async fn main() {
     loop {
         world_info.fps = get_fps();
 
-        world.tick();
         let w = image.width();
         let h = image.height();
 
@@ -91,6 +91,7 @@ async fn main() {
 
         // use parallel iterator to speed up rendering
         /* */
+
         image
             .get_image_data_mut()
             .par_iter_mut()
@@ -103,6 +104,28 @@ async fn main() {
                 let c = color_u8!(color.0, color.1, color.2, 255);
                 *pixel = [color.0, color.1, color.2, 255];
             });
+
+        if world.cleared {
+            world.reset();
+        } else if !world.modified_indices.is_empty() {
+            // go through modified indices and only update those on the image
+            for idx in world.modified_indices.iter() {
+                let x = idx % w as usize;
+                let y = idx / w as usize;
+                let particle = world.get_particle(x as i32, y as i32);
+                let color = particle_to_color(particle.variant);
+                let c = color_u8!(color.0, color.1, color.2, 255);
+                image.set_pixel(x as u32, y as u32, c);
+            }
+        }
+
+        if !world.needs_update() {
+            world.pause();
+        }
+
+        if world.running {
+            world.tick();
+        }
 
         let mouse_wheel = mouse_wheel().1;
         //world_info.properties.tool_radius += mouse_wheel;
@@ -117,6 +140,7 @@ async fn main() {
             && mouse_y < screen_h as usize - 60
             && mouse_x < screen_w as usize - 200
         {
+            world.resume();
             // use screen coords mapped to world coords
             // make sure that the particle at the mouse position is empty
             if world
@@ -135,6 +159,7 @@ async fn main() {
         }
 
         if is_mouse_button_down(MouseButton::Right) {
+            world.resume();
             erase_radius(
                 &mut world,
                 mouse_x_world as i32,
@@ -142,13 +167,28 @@ async fn main() {
                 world_info.properties.tool_radius as i32,
             );
         }
+        #[cfg(target_arch = "a")]
         for touch in touches() {
+            world.resume();
             println!("Touch at {}, {}", touch.position.x, touch.position.y);
-            world.set_particle(
-                touch.position.x as i32,
-                touch.position.y as i32,
-                Variant::Sand,
-            );
+
+            if touch.position.y < screen_h - 60. && touch.position.x < screen_w - 200. {
+                // use screen coords mapped to world coords
+                // make sure that the particle at the mouse position is empty
+                if world
+                    .get_particle(touch.position.x as i32, touch.position.y as i32)
+                    .variant
+                    == Variant::Empty
+                {
+                    paint_radius(
+                        &mut world,
+                        touch.position.x as i32,
+                        touch.position.y as i32,
+                        world_info.properties.tool_type,
+                        world_info.properties.tool_radius as i32,
+                    );
+                }
+            }
         }
 
         // if z is pressed, draw a zoomed in version of the world at the mouse position inside a rect
@@ -158,7 +198,7 @@ async fn main() {
         }
 
         if is_key_pressed(KeyCode::Space) {
-            world.running = !world.running;
+            world.pause();
         }
 
         game_properties.hovering_over = world
@@ -293,17 +333,18 @@ fn draw_top_panel(world_info: &mut WorldInfo) {
 }
 
 fn draw_tool_outline(world_info: &mut WorldInfo) {
-    // get mouse pos
+    // Get mouse position
     let (mouse_x, mouse_y) = mouse_position();
-    let mouse_x = mouse_x as usize;
+    let mouse_x = mouse_x as f32;
+    let mouse_y = mouse_y as f32;
+
     let radius = world_info.properties.tool_radius;
-    draw_circle_lines(
-        mouse_x as f32,
-        mouse_y as f32,
-        radius,
-        2.0,
-        Color::new(1.0, 1.0, 1.0, 1.0),
-    );
+
+    // Calculate the position to draw the outline so that it's centered on the tool
+    let draw_x = mouse_x - radius;
+    let draw_y = mouse_y - radius;
+
+    draw_circle_lines(draw_x, draw_y, radius, 2.0, Color::new(1.0, 1.0, 1.0, 1.0));
 }
 
 fn paint_radius(world: &mut World, x: i32, y: i32, variant: Variant, radius: i32) {
@@ -331,4 +372,6 @@ fn register_element_groups(manager: &ElementManager) {
     manager.register_group("Liquids", vec![Variant::Water, Variant::SaltWater]);
     manager.register_group("Gases", vec![Variant::Smoke]);
     manager.register_group("Explosives", vec![Variant::Fire]);
+    manager.register_group("Walls", vec![Variant::Wall]);
+    manager.register_group("SubAtomic", vec![])
 }
