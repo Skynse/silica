@@ -1,4 +1,4 @@
-use macroquad::miniquad::window::screen_size;
+use macroquad::miniquad::window::{screen_size, show_keyboard};
 use macroquad::prelude::*;
 use macroquad::ui::{hash, root_ui, widgets, Skin};
 use silica_engine::group::ElementManager;
@@ -9,8 +9,9 @@ use std::ops::AddAssign;
 fn window_conf() -> Conf {
     Conf {
         window_title: "Silica".to_owned(),
-        window_width: 1280,
-        window_height: 920,
+        window_width: 1390,
+        window_height: 1020,
+        window_resizable: false,
         ..Default::default()
     }
 }
@@ -35,8 +36,9 @@ async fn main() {
     let w: usize = 611;
     let h: usize = 383;
     let mut image = Image::gen_image_color(w as u16, h as u16, BLACK);
-    let mut world: World = World::new(w.clone(), h.clone());
+    let mut world: World = World::new(w as i32, h as i32);
     let texture = Texture2D::from_image(&image);
+
     let game_properties = GameProperties {
         tool_radius: 10.0,
         tool_type: Variant::Sand,
@@ -55,7 +57,7 @@ async fn main() {
 
     loop {
         world_info.fps = get_fps();
-        clear_background(BLACK);
+
         world.tick();
         let w = image.width();
         let h = image.height();
@@ -83,7 +85,10 @@ async fn main() {
         world_info.properties.tool_radius += mouse_wheel * 4.;
 
         // handle input
-        if is_mouse_button_down(MouseButton::Left) {
+        if is_mouse_button_down(MouseButton::Left)
+            && mouse_y < screen_h as usize - 60
+            && mouse_x < screen_w as usize - 200
+        {
             // use screen coords mapped to world coords
             // make sure that the particle at the mouse position is empty
             if world
@@ -117,6 +122,15 @@ async fn main() {
                 Variant::Sand,
             );
         }
+
+        if is_key_pressed(KeyCode::R) {
+            world.reset();
+        }
+
+        if is_key_pressed(KeyCode::Space) {
+            world.running = !world.running;
+        }
+
         texture.update(&image);
         draw_texture_ex(
             &texture,
@@ -124,7 +138,7 @@ async fn main() {
             0.,
             WHITE,
             DrawTextureParams {
-                dest_size: Some(vec2(screen_width(), screen_height())),
+                dest_size: Some(vec2(screen_width() - 200., screen_height() - 60.)),
                 source: Some(Rect::new(0.0, 0.0, w as f32, h as f32)),
                 ..Default::default()
             },
@@ -174,10 +188,12 @@ fn draw_group_sidebar(manager: &ElementManager, world_info: &mut WorldInfo) {
 // shows up on bottom of screen
 // truncated names to 4 chars
 fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
-    let mut ui = root_ui().window(
+    let button_size = 60.0;
+
+    let ui = root_ui().window(
         hash!(),
-        vec2(0.0, screen_height() - 30.0),
-        vec2(screen_width(), 30.0),
+        vec2(0.0, screen_height() - button_size),
+        vec2(screen_width(), 30.0 + button_size),
         |ui| {
             let binding = manager.groups.borrow();
             let group = binding
@@ -188,7 +204,7 @@ fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
             for element in elements {
                 let button = widgets::Button::new(element.to_string())
                     .position(vec2(x, 0.0))
-                    .size(vec2(100.0, 30.0))
+                    .size(vec2(100.0, 60.0))
                     .ui(ui);
 
                 // if button is selected, draw a rectangle around it
@@ -246,10 +262,11 @@ fn draw_tool_outline(world_info: &mut WorldInfo) {
     let (mouse_x, mouse_y) = mouse_position();
     let mouse_x = mouse_x as usize;
     let radius = world_info.properties.tool_radius;
-    draw_circle(
+    draw_circle_lines(
         mouse_x as f32,
         mouse_y as f32,
         radius,
+        2.0,
         Color::new(1.0, 1.0, 1.0, 1.0),
     );
 }
@@ -275,8 +292,8 @@ fn erase_radius(world: &mut World, x: i32, y: i32, radius: i32) {
 }
 
 fn register_element_groups(manager: &ElementManager) {
-    manager.register_group(
-        "Powders",
-        vec![Variant::Sand, Variant::Water, Variant::Fire],
-    )
+    manager.register_group("Powders", vec![Variant::Sand]);
+    manager.register_group("Liquids", vec![Variant::Water]);
+    manager.register_group("Gases", vec![Variant::Smoke]);
+    manager.register_group("Explosives", vec![Variant::Fire]);
 }
