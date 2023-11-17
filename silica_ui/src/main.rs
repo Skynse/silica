@@ -24,6 +24,9 @@ struct GameProperties {
     tool_type: Variant,
     hovering_over: Variant,
     selected_group_idx: usize,
+
+    pub left_mouse_down: bool,
+    pub right_mouse_down: bool,
 }
 
 struct WorldInfo {
@@ -39,7 +42,7 @@ async fn main() {
 
     let w: usize = 311;
     let h: usize = 183;
-    let mut image = Image::gen_image_color(w as u16, h as u16, BLACK);
+    let mut image = Image::gen_image_color(w as u16, h as u16, color_u8!(13, 16, 20, 1));
     let mut world: World = World::new(w as i32, h as i32);
     let texture = Texture2D::from_image(&image);
     texture.set_filter(FilterMode::Nearest);
@@ -49,6 +52,8 @@ async fn main() {
         tool_type: Variant::Sand,
         selected_group_idx: 0,
         hovering_over: Variant::Empty,
+        left_mouse_down: false,
+        right_mouse_down: false,
     };
     let mut world_info = WorldInfo {
         fps: 0,
@@ -63,6 +68,17 @@ async fn main() {
     register_element_groups(&element_manager);
 
     loop {
+        game_properties.left_mouse_down = if is_mouse_button_down(MouseButton::Left) {
+            true
+        } else {
+            false
+        };
+        game_properties.right_mouse_down = if is_mouse_button_down(MouseButton::Right) {
+            true
+        } else {
+            false
+        };
+
         world_info.fps = get_fps();
 
         let w = image.width();
@@ -74,8 +90,8 @@ async fn main() {
 
         // convert screen coords to world coords for mouse
         let (screen_w, screen_h) = screen_size();
-        let mouse_x_world = (mouse_x as f32 / screen_w * w as f32) as usize;
-        let mouse_y_world = (mouse_y as f32 / screen_h * h as f32) as usize;
+        let mouse_x_world = (mouse_x as f32 / (screen_w - 200.) * w as f32) as usize;
+        let mouse_y_world = (mouse_y as f32 / (screen_h - 60.) * h as f32) as usize;
 
         /*
         for x in 0..w as u32 {
@@ -90,7 +106,6 @@ async fn main() {
         */
 
         // use parallel iterator to speed up rendering
-        /* */
 
         image
             .get_image_data_mut()
@@ -119,13 +134,18 @@ async fn main() {
             }
         }
 
-        if !world.needs_update() {
+        if mouse_position().0 < screen_w - 200. && mouse_position().1 < screen_h - 60. {
+            world.resume();
+            let particle = world.get_particle(mouse_x_world as i32, mouse_y_world as i32);
+            world_info.properties.hovering_over = particle.variant;
+        }
+        if game_properties.left_mouse_down || game_properties.right_mouse_down {
+            world.resume();
+        } else if !world.needs_update() {
             world.pause();
         }
 
-        if world.running {
-            world.tick();
-        }
+        world.tick();
 
         let mouse_wheel = mouse_wheel().1;
         //world_info.properties.tool_radius += mouse_wheel;
@@ -136,7 +156,7 @@ async fn main() {
             world_info.properties.tool_radius /= 1.1;
         }
         // handle input
-        if is_mouse_button_down(MouseButton::Left)
+        if game_properties.left_mouse_down
             && mouse_y < screen_h as usize - 60
             && mouse_x < screen_w as usize - 200
         {
@@ -158,7 +178,7 @@ async fn main() {
             }
         }
 
-        if is_mouse_button_down(MouseButton::Right) {
+        if game_properties.right_mouse_down {
             world.resume();
             erase_radius(
                 &mut world,
@@ -167,10 +187,11 @@ async fn main() {
                 world_info.properties.tool_radius as i32,
             );
         }
-        #[cfg(target_arch = "a")]
+
+        // check if mouse is moving
+        #[cfg(target_arch = "wasm32")]
         for touch in touches() {
             world.resume();
-            println!("Touch at {}, {}", touch.position.x, touch.position.y);
 
             if touch.position.y < screen_h - 60. && touch.position.x < screen_w - 200. {
                 // use screen coords mapped to world coords
@@ -198,12 +219,18 @@ async fn main() {
         }
 
         if is_key_pressed(KeyCode::Space) {
-            world.pause();
+            if world.running {
+                world.pause();
+            } else {
+                world.resume();
+            }
         }
 
-        game_properties.hovering_over = world
-            .get_particle(mouse_x_world as i32, mouse_y_world as i32)
+        /*
+        world_info.properties.hovering_over = world
+            .get_particle(mouse_x_world as i32 - 200, mouse_y_world as i32 - 60)
             .variant;
+         */
 
         texture.update(&image);
         draw_texture_ex(
@@ -223,7 +250,6 @@ async fn main() {
         draw_tool_outline(&mut world_info);
         draw_group_sidebar(&element_manager, &mut world_info);
         draw_element_list(&element_manager, &mut world_info);
-
         next_frame().await
     }
 }
@@ -340,18 +366,32 @@ fn draw_tool_outline(world_info: &mut WorldInfo) {
 
     let radius = world_info.properties.tool_radius;
 
-    // Calculate the position to draw the outline so that it's centered on the tool
-    let draw_x = mouse_x - radius;
-    let draw_y = mouse_y - radius;
-
-    draw_circle_lines(draw_x, draw_y, radius, 2.0, Color::new(1.0, 1.0, 1.0, 1.0));
+    draw_circle_lines(
+        mouse_x,
+        mouse_y,
+        radius,
+        2.0,
+        Color::new(1.0, 1.0, 1.0, 1.0),
+    );
 }
 
 fn paint_radius(world: &mut World, x: i32, y: i32, variant: Variant, radius: i32) {
+    let center_x = x as f32 + 0.1; // Adding 0.5 for a half-pixel offset to center particles
+    let center_y = y as f32 + 0.1;
+
     for dx in -radius..radius {
         for dy in -radius..radius {
-            if dx * dx + dy * dy < radius * radius {
-                world.set_particle(x + dx, y + dy, variant);
+            let distance_squared = (dx * dx + dy * dy) as f32;
+            let radius_squared = radius as f32 * radius as f32;
+
+            if distance_squared < radius_squared {
+                let particle_x = center_x + dx as f32;
+                let particle_y = center_y + dy as f32;
+                let probability_to_draw = ::rand::thread_rng().gen_range(0..100);
+                if probability_to_draw < 50 && variant != Variant::Wall {
+                    continue;
+                }
+                world.set_particle(particle_x as i32, particle_y as i32, variant);
             }
         }
     }
