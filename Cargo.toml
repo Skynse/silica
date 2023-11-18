@@ -5,3 +5,8 @@ members = [
     "silica_ui",
 ]
 
+[profile.release]
+opt-level = 3
+
+[profile.dev]
+opt-level = 0

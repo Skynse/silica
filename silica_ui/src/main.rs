@@ -1,11 +1,15 @@
+mod manager;
+mod utils;
+
 use macroquad::miniquad::window::{screen_size, show_keyboard};
 use macroquad::prelude::*;
-use macroquad::ui::{hash, root_ui, widgets, Skin};
 
 use ::rand::Rng;
+use manager::{GameProperties, Property, Tool, WorldInfo};
 use rayon::prelude::*;
 use silica_engine::group::ElementManager;
-use silica_engine::{prelude::*, world};
+use silica_engine::{prelude::*, variant, world};
+use utils::*;
 
 fn window_conf() -> Conf {
     Conf {
@@ -17,23 +21,6 @@ fn window_conf() -> Conf {
         window_resizable: false,
         ..Default::default()
     }
-}
-#[derive(Clone, Copy, Debug)]
-struct GameProperties {
-    tool_radius: f32,
-    tool_type: Variant,
-    hovering_over: Variant,
-    selected_group_idx: usize,
-
-    pub left_mouse_down: bool,
-    pub right_mouse_down: bool,
-}
-
-struct WorldInfo {
-    fps: i32,
-    properties: GameProperties,
-    world_width: usize,
-    world_height: usize,
 }
 
 #[macroquad::main(window_conf)]
@@ -49,9 +36,10 @@ async fn main() {
 
     let mut game_properties = GameProperties {
         tool_radius: 10.0,
-        tool_type: Variant::Sand,
+        tool_type: Tool::ElementTool(Variant::Sand),
         selected_group_idx: 0,
-        hovering_over: Variant::Empty,
+        hovering_over: EMPTY_CELL,
+        hovering_temperature: 0.0,
         left_mouse_down: false,
         right_mouse_down: false,
     };
@@ -120,6 +108,7 @@ async fn main() {
                 *pixel = [color.0, color.1, color.2, 255];
             });
 
+        //** */
         if world.cleared {
             world.reset();
         } else if !world.modified_indices.is_empty() {
@@ -135,15 +124,12 @@ async fn main() {
         }
 
         if mouse_position().0 < screen_w - 200. && mouse_position().1 < screen_h - 60. {
-            world.resume();
             let particle = world.get_particle(mouse_x_world as i32, mouse_y_world as i32);
-            world_info.properties.hovering_over = particle.variant;
+            world_info.properties.hovering_over = particle;
+            world_info.properties.hovering_temperature =
+                world.get_temperature(mouse_x_world as i32, mouse_y_world as i32);
         }
-        if game_properties.left_mouse_down || game_properties.right_mouse_down {
-            world.resume();
-        } else if !world.needs_update() {
-            world.pause();
-        }
+        if game_properties.left_mouse_down || game_properties.right_mouse_down {}
 
         world.tick();
 
@@ -160,26 +146,29 @@ async fn main() {
             && mouse_y < screen_h as usize - 60
             && mouse_x < screen_w as usize - 200
         {
-            world.resume();
             // use screen coords mapped to world coords
             // make sure that the particle at the mouse position is empty
-            if world
-                .get_particle(mouse_x_world as i32, mouse_y_world as i32)
-                .variant
-                == Variant::Empty
-            {
+
+            if let Tool::ElementTool(variant) = world_info.properties.tool_type {
                 paint_radius(
                     &mut world,
                     mouse_x_world as i32,
                     mouse_y_world as i32,
-                    world_info.properties.tool_type,
+                    variant,
                     world_info.properties.tool_radius as i32,
+                );
+            } else {
+                // If the tool is not an ElementTool, use the tool directly
+                use_tool(
+                    world_info.properties,
+                    &mut world,
+                    mouse_x_world as i32,
+                    mouse_y_world as i32,
                 );
             }
         }
 
         if game_properties.right_mouse_down {
-            world.resume();
             erase_radius(
                 &mut world,
                 mouse_x_world as i32,
@@ -215,7 +204,7 @@ async fn main() {
         // if z is pressed, draw a zoomed in version of the world at the mouse position inside a rect
 
         if is_key_pressed(KeyCode::R) {
-            world.reset();
+            world.cleared = true;
         }
 
         if is_key_pressed(KeyCode::Space) {
@@ -225,12 +214,6 @@ async fn main() {
                 world.resume();
             }
         }
-
-        /*
-        world_info.properties.hovering_over = world
-            .get_particle(mouse_x_world as i32 - 200, mouse_y_world as i32 - 60)
-            .variant;
-         */
 
         texture.update(&image);
         draw_texture_ex(
@@ -250,168 +233,26 @@ async fn main() {
         draw_tool_outline(&mut world_info);
         draw_group_sidebar(&element_manager, &mut world_info);
         draw_element_list(&element_manager, &mut world_info);
+
         next_frame().await
-    }
-}
-
-fn draw_walls(world: &mut World) {
-    for x in 0..world.width {
-        world.set_particle(x as i32, 0, Variant::Wall);
-        world.set_particle(x as i32, world.height as i32 - 1, Variant::Wall);
-    }
-    for y in 0..world.height {
-        world.set_particle(0, y as i32, Variant::Wall);
-        world.set_particle(world.width as i32 - 1, y as i32, Variant::Wall);
-    }
-}
-
-fn draw_group_sidebar(manager: &ElementManager, world_info: &mut WorldInfo) {
-    let mut ui = root_ui().window(
-        hash!(),
-        vec2(screen_width() - 200.0, 30.0),
-        vec2(200.0, screen_height() - 30.0),
-        |ui| {
-            ui.label(None, "Groups");
-            for (idx, group) in manager.groups.borrow().iter().enumerate() {
-                let button = widgets::Button::new(group.group_name.clone())
-                    .position(vec2(0.0, 30.0 * (idx + 1) as f32))
-                    .size(vec2(200.0, 30.0))
-                    .ui(ui);
-                if button {
-                    world_info.properties.selected_group_idx = idx;
-                }
-            }
-        },
-    );
-}
-
-// horizontal left to right assortment of elements
-// shows up on bottom of screen
-// truncated names to 4 chars
-fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
-    let button_size = 60.0;
-
-    let ui = root_ui().window(
-        hash!(),
-        vec2(0.0, screen_height() - button_size),
-        vec2(screen_width(), 30.0 + button_size),
-        |ui| {
-            let binding = manager.groups.borrow();
-            let group = binding
-                .get(world_info.properties.selected_group_idx)
-                .unwrap();
-            let elements = group.get_elements();
-            let mut x = 0.0;
-            for element in elements {
-                let button = widgets::Button::new(element.to_string())
-                    .position(vec2(x, 0.0))
-                    .size(vec2(100.0, 60.0))
-                    .ui(ui);
-
-                // if button is selected, draw a rectangle around it
-                if world_info.properties.tool_type == element {
-                    draw_rectangle_lines(
-                        x,
-                        screen_height() - 30.0,
-                        100.0,
-                        30.0,
-                        2.0,
-                        Color::new(1.0, 1.0, 1.0, 1.0),
-                    );
-                }
-                if button {
-                    world_info.properties.tool_type = element;
-                }
-                x += 100.0;
-            }
-        },
-    );
-}
-fn draw_top_panel(world_info: &mut WorldInfo) {
-    let panel_height = 30.0; // Adjust the height of the top panel as needed
-
-    // Draw a colored rectangle at the top to represent the panel
-    draw_rectangle(
-        0.0,
-        0.0,
-        screen_width(),
-        panel_height,
-        Color::new(50.0 / 255.0, 50.0 / 255.0, 50.0 / 255.0, 0.0), // Adjust the color as needed
-    );
-
-    // Draw text or other UI elements on the top panel
-    draw_text(
-        &format!("FPS: {:.2}", world_info.fps), // Display FPS with two decimal places
-        20.0,
-        20.0,
-        30.0,
-        Color::new(1.0, 1.0, 1.0, 1.0), // Adjust the color as needed
-    );
-
-    // draw currently selected tool to the right
-    draw_text(
-        &format!("{:?}", world_info.properties.hovering_over),
-        screen_width() - 200.0,
-        20.0,
-        30.0,
-        Color::new(1.0, 1.0, 1.0, 1.0), // Adjust the color as needed
-    );
-}
-
-fn draw_tool_outline(world_info: &mut WorldInfo) {
-    // Get mouse position
-    let (mouse_x, mouse_y) = mouse_position();
-    let mouse_x = mouse_x as f32;
-    let mouse_y = mouse_y as f32;
-
-    let radius = world_info.properties.tool_radius;
-
-    draw_circle_lines(
-        mouse_x,
-        mouse_y,
-        radius,
-        2.0,
-        Color::new(1.0, 1.0, 1.0, 1.0),
-    );
-}
-
-fn paint_radius(world: &mut World, x: i32, y: i32, variant: Variant, radius: i32) {
-    let center_x = x as f32 + 0.1; // Adding 0.5 for a half-pixel offset to center particles
-    let center_y = y as f32 + 0.1;
-
-    for dx in -radius..radius {
-        for dy in -radius..radius {
-            let distance_squared = (dx * dx + dy * dy) as f32;
-            let radius_squared = radius as f32 * radius as f32;
-
-            if distance_squared < radius_squared {
-                let particle_x = center_x + dx as f32;
-                let particle_y = center_y + dy as f32;
-                let probability_to_draw = ::rand::thread_rng().gen_range(0..100);
-                if probability_to_draw < 50 && variant != Variant::Wall {
-                    continue;
-                }
-                world.set_particle(particle_x as i32, particle_y as i32, variant);
-            }
-        }
-    }
-}
-
-fn erase_radius(world: &mut World, x: i32, y: i32, radius: i32) {
-    for dx in -radius..radius {
-        for dy in -radius..radius {
-            if dx * dx + dy * dy < radius * radius {
-                world.set_particle(x + dx, y + dy, Variant::Empty);
-            }
-        }
     }
 }
 
 fn register_element_groups(manager: &ElementManager) {
     manager.register_group("Powders", vec![Variant::Sand, Variant::Salt]);
     manager.register_group("Liquids", vec![Variant::Water, Variant::SaltWater]);
-    manager.register_group("Gases", vec![Variant::Smoke]);
+    manager.register_group("Gases", vec![Variant::Smoke, Variant::CO2]);
     manager.register_group("Explosives", vec![Variant::Fire]);
     manager.register_group("Walls", vec![Variant::Wall]);
-    manager.register_group("SubAtomic", vec![])
+    manager.register_group(
+        "PHYS",
+        vec![
+            Variant::CARB,
+            Variant::IRON,
+            Variant::OXGN,
+            Variant::HYGN,
+            Variant::HELM,
+            Variant::NITR,
+        ],
+    )
 }
