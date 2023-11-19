@@ -61,7 +61,7 @@ pub fn draw_tool_outline(world_info: &mut WorldInfo) {
 pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
     let button_size = 60.0;
 
-    let ui = root_ui().window(
+    root_ui().window(
         hash!(),
         vec2(0.0, screen_height() - button_size),
         vec2(screen_width(), 30.0 + button_size),
@@ -79,7 +79,7 @@ pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
                     .ui(ui);
 
                 // use the variant color to draw a rectangle over the button
-                let color = variant::variant_type(element).color;
+                let color = variant::variant_type(element).color.to_rgba8();
                 draw_rectangle(
                     x,
                     screen_height() - 30.0,
@@ -112,12 +112,12 @@ pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
     );
 
     // while we're at it, lets also add the property buttons
-    let ui = root_ui().window(
+    root_ui().window(
         hash!(),
         vec2(0.0, screen_height() - button_size - 30.0),
         vec2(screen_width(), 30.0),
         |ui| {
-            let button = widgets::Button::new("Temperature")
+            let button = widgets::Button::new("HEAT")
                 .position(vec2(0.0, 0.0))
                 .size(vec2(100.0, 30.0))
                 .ui(ui);
@@ -157,7 +157,7 @@ pub fn draw_top_panel(world_info: &mut WorldInfo) {
 
     // draw currently selected tool to the right
     let variant = world_info.properties.tool_type.get_variant();
-    let text = match variant {
+    match variant {
         Some(variant) => variant.to_string(),
         None => "None".to_string(),
     };
@@ -171,7 +171,7 @@ pub fn draw_top_panel(world_info: &mut WorldInfo) {
 
     // write temperature
     let temp = world_info.properties.hovering_over.temperature;
-    let text = format!("{:.2}C", temp);
+
     draw_text(
         &format!("{:.2}C", world_info.properties.hovering_temperature),
         screen_width() - 100.0,
@@ -246,6 +246,21 @@ pub fn use_tool(props: GameProperties, world: &mut World, x: i32, y: i32) {
                         let exp = -distance_squared / (2.0 * sigm.powi(2));
 
                         world.set_pressure(x + dx, y + dy, 100. * exp.exp());
+                    }
+                }
+            }
+
+            Property::COOL => {
+                //world.set_pressure(x, y, 100);
+                let radius: i32 = props.tool_radius as i32;
+                for dx in -radius..radius {
+                    for dy in -radius..radius {
+                        let distance_squared = (dx * dx + dy * dy) as f32;
+                        let radius_squared = radius as f32 * radius as f32;
+                        let sigm: f32 = 0.5;
+                        let exp = -distance_squared / (2.0 * sigm.powi(2));
+
+                        world.add_heat(x + dx, y + dy, -100. * exp.exp());
                     }
                 }
             }

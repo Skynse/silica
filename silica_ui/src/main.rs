@@ -27,8 +27,8 @@ fn window_conf() -> Conf {
 async fn main() {
     // Initialization
 
-    let w: usize = 311;
-    let h: usize = 183;
+    let w: usize = 611;
+    let h: usize = 383;
     let mut image = Image::gen_image_color(w as u16, h as u16, color_u8!(13, 16, 20, 1));
     let mut world: World = World::new(w as i32, h as i32);
     let texture = Texture2D::from_image(&image);
@@ -103,7 +103,7 @@ async fn main() {
                 let x = idx % w as usize;
                 let y = idx / w as usize;
                 let particle = world.get_particle(x as i32, y as i32);
-                let color = particle_to_color(particle.variant);
+                let color = particle_to_color(particle.variant).to_rgba8();
                 let c = color_u8!(color.0, color.1, color.2, 255);
                 *pixel = [color.0, color.1, color.2, 255];
             });
@@ -117,8 +117,8 @@ async fn main() {
                 let x = idx % w as usize;
                 let y = idx / w as usize;
                 let particle = world.get_particle(x as i32, y as i32);
-                let color = particle_to_color(particle.variant);
-                let c = color_u8!(color.0, color.1, color.2, 255);
+                let color = particle_to_color(particle.variant).to_rgba8();
+                let c = color_u8!(color.0, color.1, color.2, color.3);
                 image.set_pixel(x as u32, y as u32, c);
             }
         }

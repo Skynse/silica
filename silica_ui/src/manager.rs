@@ -15,6 +15,7 @@ pub struct GameProperties {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Property {
     Temperature,
+    COOL,
     Pressure,
 }
 
