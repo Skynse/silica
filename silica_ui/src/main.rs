@@ -5,11 +5,15 @@ use macroquad::miniquad::window::{screen_size, show_keyboard};
 use macroquad::prelude::*;
 
 use ::rand::Rng;
+use macroquad::ui::{root_ui, Skin, Style};
 use manager::{GameProperties, Property, Tool, WorldInfo};
 use rayon::prelude::*;
 use silica_engine::group::ElementManager;
 use silica_engine::{prelude::*, variant, world};
 use utils::*;
+
+const UI_OFFSET_X: f32 = 50.0;
+const UI_OFFSET_Y: f32 = 30.;
 
 fn window_conf() -> Conf {
     Conf {
@@ -25,6 +29,19 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    let label_style: Style = root_ui()
+        .style_builder()
+        .font(include_bytes!("./fonts/standard.ttf"))
+        .unwrap()
+        .text_color(Color::from_rgba(0, 180, 120, 255))
+        .font_size(30)
+        .build();
+
+    let skin = Skin {
+        label_style,
+        ..root_ui().default_skin()
+    };
+
     // Initialization
 
     let w: usize = 611;
@@ -48,14 +65,16 @@ async fn main() {
         properties: game_properties,
         world_width: w,
         world_height: h,
+        parts: 0,
     };
 
     draw_walls(&mut world);
-
+    let mut parts: usize = 0;
     let element_manager: ElementManager = ElementManager::new();
     register_element_groups(&element_manager);
 
     loop {
+        root_ui().push_skin(&skin);
         game_properties.left_mouse_down = if is_mouse_button_down(MouseButton::Left) {
             true
         } else {
@@ -78,8 +97,8 @@ async fn main() {
 
         // convert screen coords to world coords for mouse
         let (screen_w, screen_h) = screen_size();
-        let mouse_x_world = (mouse_x as f32 / (screen_w - 200.) * w as f32) as usize;
-        let mouse_y_world = (mouse_y as f32 / (screen_h - 60.) * h as f32) as usize;
+        let mouse_x_world = (mouse_x as f32 / (screen_w - UI_OFFSET_X) * w as f32) as usize;
+        let mouse_y_world = (mouse_y as f32 / (screen_h - UI_OFFSET_Y) * h as f32) as usize;
 
         /*
         for x in 0..w as u32 {
@@ -103,12 +122,13 @@ async fn main() {
                 let x = idx % w as usize;
                 let y = idx / w as usize;
                 let particle = world.get_particle(x as i32, y as i32);
-                let color = particle_to_color(particle.variant).to_rgba8();
-                let c = color_u8!(color.0, color.1, color.2, 255);
+
+                let color = particle_to_color(particle).to_rgba8();
+
                 *pixel = [color.0, color.1, color.2, 255];
             });
 
-        //** */
+        /* */
         if world.cleared {
             world.reset();
         } else if !world.modified_indices.is_empty() {
@@ -117,13 +137,18 @@ async fn main() {
                 let x = idx % w as usize;
                 let y = idx / w as usize;
                 let particle = world.get_particle(x as i32, y as i32);
-                let color = particle_to_color(particle.variant).to_rgba8();
+                parts += 1;
+                let color = particle_to_color(particle).to_rgba8();
+
                 let c = color_u8!(color.0, color.1, color.2, color.3);
                 image.set_pixel(x as u32, y as u32, c);
             }
         }
 
-        if mouse_position().0 < screen_w - 200. && mouse_position().1 < screen_h - 60. {
+        world_info.parts = parts;
+        if mouse_position().0 < screen_w - UI_OFFSET_X
+            && mouse_position().1 < screen_h - UI_OFFSET_Y
+        {
             let particle = world.get_particle(mouse_x_world as i32, mouse_y_world as i32);
             world_info.properties.hovering_over = particle;
             world_info.properties.hovering_temperature =
@@ -143,8 +168,8 @@ async fn main() {
         }
         // handle input
         if game_properties.left_mouse_down
-            && mouse_y < screen_h as usize - 60
-            && mouse_x < screen_w as usize - 200
+            && mouse_y < screen_h as usize - UI_OFFSET_Y as usize
+            && mouse_x < screen_w as usize - UI_OFFSET_X as usize
         {
             // use screen coords mapped to world coords
             // make sure that the particle at the mouse position is empty
@@ -222,7 +247,10 @@ async fn main() {
             0.,
             WHITE,
             DrawTextureParams {
-                dest_size: Some(vec2(screen_width() - 200., screen_height() - 60.)),
+                dest_size: Some(vec2(
+                    screen_width() - UI_OFFSET_X,
+                    screen_height() - UI_OFFSET_Y, //ADJUST BASED ON BUTTON SIZE,
+                )),
                 source: Some(Rect::new(0.0, 0.0, w as f32, h as f32)),
 
                 ..Default::default()
@@ -230,6 +258,7 @@ async fn main() {
         );
 
         draw_top_panel(&mut world_info);
+        draw_bottom_panel(&mut world_info, &mut game_properties);
         draw_tool_outline(&mut world_info);
         draw_group_sidebar(&element_manager, &mut world_info);
         draw_element_list(&element_manager, &mut world_info);
@@ -239,11 +268,11 @@ async fn main() {
 }
 
 fn register_element_groups(manager: &ElementManager) {
-    manager.register_group("Powders", vec![Variant::Sand, Variant::Salt]);
-    manager.register_group("Liquids", vec![Variant::Water, Variant::SaltWater]);
-    manager.register_group("Gases", vec![Variant::Smoke, Variant::CO2]);
-    manager.register_group("Explosives", vec![Variant::Fire]);
-    manager.register_group("Walls", vec![Variant::Wall]);
+    manager.register_group("PWDR", vec![Variant::Sand, Variant::Salt]);
+    manager.register_group("FLUID", vec![Variant::Water, Variant::SaltWater]);
+    manager.register_group("GAS", vec![Variant::Smoke, Variant::CO2, Variant::WTVP]);
+    manager.register_group("EXPV", vec![Variant::Fire]);
+    manager.register_group("WALL", vec![Variant::Wall]);
     manager.register_group(
         "PHYS",
         vec![
@@ -254,5 +283,6 @@ fn register_element_groups(manager: &ElementManager) {
             Variant::HELM,
             Variant::NITR,
         ],
-    )
+    );
+    manager.register_group("Life", vec![Variant::GOL])
 }

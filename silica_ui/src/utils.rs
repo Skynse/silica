@@ -1,11 +1,14 @@
+use std::{default, hash};
+
 use ::rand::Rng;
 use macroquad::prelude::*;
-use macroquad::ui::widgets;
 use macroquad::ui::{hash, root_ui, Skin};
+use macroquad::ui::{widgets, Style};
 use silica_engine::variant;
 use silica_engine::{group::ElementManager, variant::Variant, world::World};
 
 use crate::manager::{GameProperties, Property, Tool, WorldInfo};
+use crate::{UI_OFFSET_X, UI_OFFSET_Y};
 
 pub fn draw_walls(world: &mut World) {
     for x in 0..world.width {
@@ -19,16 +22,15 @@ pub fn draw_walls(world: &mut World) {
 }
 
 pub fn draw_group_sidebar(manager: &ElementManager, world_info: &mut WorldInfo) {
-    let mut ui = root_ui().window(
+    root_ui().window(
         hash!(),
-        vec2(screen_width() - 200.0, 30.0),
-        vec2(200.0, screen_height() - 30.0),
+        vec2(screen_width() - UI_OFFSET_X, 30.0),
+        vec2(UI_OFFSET_X, screen_height() - 30.0),
         |ui| {
-            ui.label(None, "Groups");
             for (idx, group) in manager.groups.borrow().iter().enumerate() {
                 let button = widgets::Button::new(group.group_name.clone())
                     .position(vec2(0.0, 30.0 * (idx + 1) as f32))
-                    .size(vec2(200.0, 30.0))
+                    .size(vec2(UI_OFFSET_X, 30.0))
                     .ui(ui);
                 if button {
                     world_info.properties.selected_group_idx = idx;
@@ -59,7 +61,7 @@ pub fn draw_tool_outline(world_info: &mut WorldInfo) {
 }
 
 pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
-    let button_size = 60.0;
+    let button_size = UI_OFFSET_Y;
 
     root_ui().window(
         hash!(),
@@ -75,34 +77,9 @@ pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
             for element in elements {
                 let button = widgets::Button::new(element.get_name())
                     .position(vec2(x, 0.0))
-                    .size(vec2(100.0, 60.0))
+                    .size(vec2(100.0, UI_OFFSET_Y))
                     .ui(ui);
 
-                // use the variant color to draw a rectangle over the button
-                let color = variant::variant_type(element).color.to_rgba8();
-                draw_rectangle(
-                    x,
-                    screen_height() - 30.0,
-                    100.0,
-                    30.0,
-                    Color::new(
-                        color.0 as f32 / 255.0,
-                        color.1 as f32 / 255.0,
-                        color.2 as f32 / 255.0,
-                        0.5,
-                    ),
-                );
-                // if button is selected, draw a rectangle around it
-                if world_info.properties.tool_type.get_variant() == Some(element) {
-                    draw_rectangle_lines(
-                        x,
-                        screen_height() - 30.0,
-                        100.0,
-                        30.0,
-                        2.0,
-                        Color::new(1.0, 1.0, 1.0, 1.0),
-                    );
-                }
                 if button {
                     world_info.properties.tool_type = Tool::ElementTool(element);
                 }
@@ -110,23 +87,51 @@ pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
             }
         },
     );
+}
 
-    // while we're at it, lets also add the property buttons
+// for tools
+pub fn draw_bottom_panel(world_info: &mut WorldInfo, gameprops: &mut GameProperties) {
+    // draw right above the element panel
+
+    let panel_height = 30.0; // Adjust the height of the top panel as needed
+    let button_width: f32 = 30.0;
+    // draw some buttons for the three tools, selectable too
     root_ui().window(
         hash!(),
-        vec2(0.0, screen_height() - button_size - 30.0),
-        vec2(screen_width(), 30.0),
+        vec2(0.0, screen_height() - panel_height - UI_OFFSET_Y),
+        vec2(screen_width(), panel_height + UI_OFFSET_Y),
         |ui| {
-            let button = widgets::Button::new("HEAT")
-                .position(vec2(0.0, 0.0))
-                .size(vec2(100.0, 30.0))
+            ui.push_skin(&Skin {
+                window_style: root_ui()
+                    .style_builder()
+                    .color(Color::new(0.0, 0.0, 0.0, 0.0))
+                    .build(),
+
+                ..root_ui().default_skin()
+            });
+            let mut x = 0.0;
+            let mut y = 0.0;
+            let button = widgets::Button::new("E")
+                .position(vec2(x, y))
+                .size(vec2(button_width, panel_height))
                 .ui(ui);
             if button {
                 world_info.properties.tool_type = Tool::PropertyTool(Property::Temperature);
             }
-            let button = widgets::Button::new("Pressure")
-                .position(vec2(100.0, 0.0))
-                .size(vec2(100.0, 30.0))
+            x += button_width;
+
+            let button = widgets::Button::new("C")
+                .position(vec2(x, y))
+                .size(vec2(button_width, panel_height))
+                .ui(ui);
+            if button {
+                world_info.properties.tool_type = Tool::PropertyTool(Property::COOL);
+            }
+            x += button_width;
+
+            let button = widgets::Button::new("P")
+                .position(vec2(x, y))
+                .size(vec2(button_width, panel_height))
                 .ui(ui);
             if button {
                 world_info.properties.tool_type = Tool::PropertyTool(Property::Pressure);
@@ -134,6 +139,7 @@ pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
         },
     );
 }
+
 pub fn draw_top_panel(world_info: &mut WorldInfo) {
     let panel_height = 30.0; // Adjust the height of the top panel as needed
 
@@ -148,7 +154,7 @@ pub fn draw_top_panel(world_info: &mut WorldInfo) {
 
     // Draw text or other UI elements on the top panel
     draw_text(
-        &format!("FPS: {:.2}", world_info.fps), // Display FPS with two decimal places
+        &format!("FPS: {:.2}\nParts: {}", world_info.fps, world_info.parts), // Display FPS with two decimal places
         20.0,
         20.0,
         30.0,
@@ -173,8 +179,8 @@ pub fn draw_top_panel(world_info: &mut WorldInfo) {
     let temp = world_info.properties.hovering_over.temperature;
 
     draw_text(
-        &format!("{:.2}C", world_info.properties.hovering_temperature),
-        screen_width() - 100.0,
+        &format!("AH: {:.2}C", world_info.properties.hovering_temperature),
+        screen_width() - 150.0,
         20.0,
         30.0,
         Color::new(1.0, 1.0, 1.0, 1.0), // Adjust the color as needed
@@ -190,8 +196,6 @@ pub fn draw_top_panel(world_info: &mut WorldInfo) {
         Color::new(1.0, 1.0, 1.0, 1.0), // Adjust the color as needed
     );
 }
-
-// draw thermometer
 
 pub fn paint_radius(world: &mut World, x: i32, y: i32, variant: Variant, radius: i32) {
     let center_x = x as f32 + 0.1; // Adding 0.5 for a half-pixel offset to center particles
@@ -231,7 +235,7 @@ pub fn use_tool(props: GameProperties, world: &mut World, x: i32, y: i32) {
                         let sigm: f32 = 0.5;
                         let exp = -distance_squared / (2.0 * sigm.powi(2));
 
-                        world.add_heat(x + dx, y + dy, 100. * exp.exp());
+                        world.add_heat(x, y, 100. * exp.exp());
                     }
                 }
             }

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use silica_engine::variant::{Particle, Variant};
 
 #[derive(Clone, Copy, Debug)]
@@ -25,8 +27,18 @@ pub enum Tool {
     PropertyTool(Property),
 }
 
+impl Display for Property {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Property::Temperature => write!(f, "HEAT"),
+            Property::COOL => write!(f, "COOL"),
+            Property::Pressure => write!(f, "PRSR"),
+        }
+    }
+}
+
 impl Tool {
-    fn get_property(&self) -> Option<Property> {
+    pub fn get_property(&self) -> Option<Property> {
         match self {
             Tool::ElementTool(variant) => None,
             Tool::PropertyTool(property) => Some(*property),
@@ -46,4 +58,5 @@ pub struct WorldInfo {
     pub properties: GameProperties,
     pub world_width: usize,
     pub world_height: usize,
+    pub parts: usize,
 }
