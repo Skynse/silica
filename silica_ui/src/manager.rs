@@ -40,7 +40,7 @@ impl Display for Property {
 impl Tool {
     pub fn get_property(&self) -> Option<Property> {
         match self {
-            Tool::ElementTool(variant) => None,
+            Tool::ElementTool(_variant) => None,
             Tool::PropertyTool(property) => Some(*property),
         }
     }
@@ -48,7 +48,7 @@ impl Tool {
     pub fn get_variant(&self) -> Option<Variant> {
         match self {
             Tool::ElementTool(variant) => Some(*variant),
-            Tool::PropertyTool(property) => None,
+            Tool::PropertyTool(_property) => None,
         }
     }
 }

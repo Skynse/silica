@@ -1,14 +1,12 @@
-use std::{default, hash};
-
 use ::rand::Rng;
 use macroquad::prelude::*;
+use macroquad::ui::widgets;
 use macroquad::ui::{hash, root_ui, Skin};
-use macroquad::ui::{widgets, Style};
-use silica_engine::variant;
+
 use silica_engine::{group::ElementManager, variant::Variant, world::World};
 
 use crate::manager::{GameProperties, Property, Tool, WorldInfo};
-use crate::{UI_OFFSET_X, UI_OFFSET_Y};
+use crate::{TOOLS, UI_OFFSET_X, UI_OFFSET_Y};
 
 pub fn draw_walls(world: &mut World) {
     for x in 0..world.width {
@@ -61,7 +59,7 @@ pub fn draw_tool_outline(world_info: &mut WorldInfo) {
 }
 
 pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
-    let button_size = UI_OFFSET_Y;
+    let button_size = 30.;
 
     root_ui().window(
         hash!(),
@@ -77,7 +75,7 @@ pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
             for element in elements {
                 let button = widgets::Button::new(element.get_name())
                     .position(vec2(x, 0.0))
-                    .size(vec2(100.0, UI_OFFSET_Y))
+                    .size(vec2(100.0, 30.))
                     .ui(ui);
 
                 if button {
@@ -90,51 +88,41 @@ pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
 }
 
 // for tools
-pub fn draw_bottom_panel(world_info: &mut WorldInfo, gameprops: &mut GameProperties) {
+pub fn draw_bottom_panel(world_info: &mut WorldInfo, _gameprops: &mut GameProperties) {
     // draw right above the element panel
 
     let panel_height = 30.0; // Adjust the height of the top panel as needed
     let button_width: f32 = 30.0;
     // draw some buttons for the three tools, selectable too
+
     root_ui().window(
         hash!(),
-        vec2(0.0, screen_height() - panel_height - UI_OFFSET_Y),
-        vec2(screen_width(), panel_height + UI_OFFSET_Y),
+        vec2(0.0, screen_height() - panel_height - 30.),
+        vec2(screen_width(), panel_height + 30.),
         |ui| {
-            ui.push_skin(&Skin {
-                window_style: root_ui()
-                    .style_builder()
-                    .color(Color::new(0.0, 0.0, 0.0, 0.0))
-                    .build(),
-
-                ..root_ui().default_skin()
-            });
             let mut x = 0.0;
-            let mut y = 0.0;
-            let button = widgets::Button::new("E")
-                .position(vec2(x, y))
-                .size(vec2(button_width, panel_height))
-                .ui(ui);
-            if button {
-                world_info.properties.tool_type = Tool::PropertyTool(Property::Temperature);
-            }
-            x += button_width;
-
-            let button = widgets::Button::new("C")
-                .position(vec2(x, y))
-                .size(vec2(button_width, panel_height))
-                .ui(ui);
-            if button {
-                world_info.properties.tool_type = Tool::PropertyTool(Property::COOL);
-            }
-            x += button_width;
-
-            let button = widgets::Button::new("P")
-                .position(vec2(x, y))
-                .size(vec2(button_width, panel_height))
-                .ui(ui);
-            if button {
-                world_info.properties.tool_type = Tool::PropertyTool(Property::Pressure);
+            let y = 0.0;
+            for p in TOOLS {
+                let button = widgets::Button::new(p.to_string())
+                    .position(vec2(x, y))
+                    .size(vec2(button_width, panel_height))
+                    .ui(ui);
+                if button {
+                    match p {
+                        Property::Temperature => {
+                            world_info.properties.tool_type =
+                                Tool::PropertyTool(Property::Temperature);
+                        }
+                        Property::COOL => {
+                            world_info.properties.tool_type = Tool::PropertyTool(Property::COOL);
+                        }
+                        Property::Pressure => {
+                            world_info.properties.tool_type =
+                                Tool::PropertyTool(Property::Pressure);
+                        }
+                    }
+                }
+                x += button_width;
             }
         },
     );
@@ -176,7 +164,7 @@ pub fn draw_top_panel(world_info: &mut WorldInfo) {
     );
 
     // write temperature
-    let temp = world_info.properties.hovering_over.temperature;
+    let _temp = world_info.properties.hovering_over.temperature;
 
     draw_text(
         &format!("AH: {:.2}C", world_info.properties.hovering_temperature),
@@ -222,7 +210,8 @@ pub fn paint_radius(world: &mut World, x: i32, y: i32, variant: Variant, radius:
 pub fn use_tool(props: GameProperties, world: &mut World, x: i32, y: i32) {
     match props.tool_type {
         Tool::ElementTool(variant) => {
-            world.set_particle(x, y, variant);
+            let radius: i32 = props.tool_radius as i32;
+            paint_radius(world, x, y, variant, radius);
         }
         Tool::PropertyTool(property) => match property {
             Property::Temperature => {
@@ -231,11 +220,16 @@ pub fn use_tool(props: GameProperties, world: &mut World, x: i32, y: i32) {
                 for dx in -radius..radius {
                     for dy in -radius..radius {
                         let distance_squared = (dx * dx + dy * dy) as f32;
-                        let radius_squared = radius as f32 * radius as f32;
-                        let sigm: f32 = 0.5;
-                        let exp = -distance_squared / (2.0 * sigm.powi(2));
+                        let _radius_squared = radius as f32 * radius as f32;
 
-                        world.add_heat(x, y, 100. * exp.exp());
+                        if distance_squared > _radius_squared {
+                            continue;
+                        }
+                        let sigm: f32 = 10.;
+                        let exp = -distance_squared / (2.0 * sigm.powi(2));
+                        // intensity based on radius
+
+                        world.add_heat(x + dx, y + dy, 40. * exp.exp());
                     }
                 }
             }
@@ -245,7 +239,7 @@ pub fn use_tool(props: GameProperties, world: &mut World, x: i32, y: i32) {
                 for dx in -radius..radius {
                     for dy in -radius..radius {
                         let distance_squared = (dx * dx + dy * dy) as f32;
-                        let radius_squared = radius as f32 * radius as f32;
+                        let _radius_squared = radius as f32 * radius as f32;
                         let sigm: f32 = 0.5;
                         let exp = -distance_squared / (2.0 * sigm.powi(2));
 
@@ -260,11 +254,15 @@ pub fn use_tool(props: GameProperties, world: &mut World, x: i32, y: i32) {
                 for dx in -radius..radius {
                     for dy in -radius..radius {
                         let distance_squared = (dx * dx + dy * dy) as f32;
-                        let radius_squared = radius as f32 * radius as f32;
-                        let sigm: f32 = 0.5;
+                        let _radius_squared = radius as f32 * radius as f32;
+
+                        if distance_squared > _radius_squared {
+                            continue;
+                        }
+                        let sigm: f32 = 10.;
                         let exp = -distance_squared / (2.0 * sigm.powi(2));
 
-                        world.add_heat(x + dx, y + dy, -100. * exp.exp());
+                        world.add_heat(x + dx, y + dy, -40. * exp.exp());
                     }
                 }
             }

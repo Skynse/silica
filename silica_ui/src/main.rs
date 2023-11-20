@@ -1,19 +1,18 @@
 mod manager;
 mod utils;
 
-use macroquad::miniquad::window::{screen_size, show_keyboard};
+use macroquad::miniquad::window::screen_size;
 use macroquad::prelude::*;
 
-use ::rand::Rng;
 use macroquad::ui::{root_ui, Skin, Style};
 use manager::{GameProperties, Property, Tool, WorldInfo};
 use rayon::prelude::*;
 use silica_engine::group::ElementManager;
-use silica_engine::{prelude::*, variant, world};
+use silica_engine::prelude::*;
 use utils::*;
 
 const UI_OFFSET_X: f32 = 50.0;
-const UI_OFFSET_Y: f32 = 30.;
+const UI_OFFSET_Y: f32 = 60.;
 
 fn window_conf() -> Conf {
     Conf {
@@ -27,6 +26,8 @@ fn window_conf() -> Conf {
     }
 }
 
+const TOOLS: [Property; 3] = [Property::Temperature, Property::COOL, Property::Pressure];
+
 #[macroquad::main(window_conf)]
 async fn main() {
     let label_style: Style = root_ui()
@@ -37,8 +38,13 @@ async fn main() {
         .font_size(30)
         .build();
 
+    let window_style: Style = root_ui()
+        .style_builder()
+        .color(Color::from_rgba(0, 0, 0, 0))
+        .build();
     let skin = Skin {
         label_style,
+        window_style,
         ..root_ui().default_skin()
     };
 
@@ -69,7 +75,7 @@ async fn main() {
     };
 
     draw_walls(&mut world);
-    let mut parts: usize = 0;
+
     let element_manager: ElementManager = ElementManager::new();
     register_element_groups(&element_manager);
 
@@ -137,7 +143,7 @@ async fn main() {
                 let x = idx % w as usize;
                 let y = idx / w as usize;
                 let particle = world.get_particle(x as i32, y as i32);
-                parts += 1;
+
                 let color = particle_to_color(particle).to_rgba8();
 
                 let c = color_u8!(color.0, color.1, color.2, color.3);
@@ -145,7 +151,7 @@ async fn main() {
             }
         }
 
-        world_info.parts = parts;
+        world_info.parts = world.get_particle_count();
         if mouse_position().0 < screen_w - UI_OFFSET_X
             && mouse_position().1 < screen_h - UI_OFFSET_Y
         {
@@ -174,13 +180,12 @@ async fn main() {
             // use screen coords mapped to world coords
             // make sure that the particle at the mouse position is empty
 
-            if let Tool::ElementTool(variant) = world_info.properties.tool_type {
-                paint_radius(
+            if let Tool::ElementTool(_) = world_info.properties.tool_type {
+                use_tool(
+                    world_info.properties,
                     &mut world,
                     mouse_x_world as i32,
                     mouse_y_world as i32,
-                    variant,
-                    world_info.properties.tool_radius as i32,
                 );
             } else {
                 // If the tool is not an ElementTool, use the tool directly
