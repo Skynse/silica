@@ -5,7 +5,7 @@ use macroquad::miniquad::window::screen_size;
 use macroquad::prelude::*;
 
 use macroquad::ui::{root_ui, Skin, Style};
-use manager::{GameProperties, Property, Tool, WorldInfo};
+use manager::{GameProperties, Property, RenderMode, Tool, WorldInfo};
 use rayon::prelude::*;
 use silica_engine::group::ElementManager;
 use silica_engine::prelude::*;
@@ -26,7 +26,12 @@ fn window_conf() -> Conf {
     }
 }
 
-const TOOLS: [Property; 3] = [Property::Temperature, Property::COOL, Property::Pressure];
+const TOOLS: [Property; 4] = [
+    Property::Temperature,
+    Property::COOL,
+    Property::Pressure,
+    Property::DelWall,
+];
 
 #[macroquad::main(window_conf)]
 async fn main() {
@@ -47,6 +52,11 @@ async fn main() {
         window_style,
         ..root_ui().default_skin()
     };
+    let _pipeline_params = PipelineParams {
+        depth_write: true,
+        depth_test: Comparison::LessOrEqual,
+        ..Default::default()
+    };
 
     // Initialization
 
@@ -65,6 +75,7 @@ async fn main() {
         hovering_temperature: 0.0,
         left_mouse_down: false,
         right_mouse_down: false,
+        render_mode: RenderMode::Normal,
     };
     let mut world_info = WorldInfo {
         fps: 0,
@@ -80,6 +91,8 @@ async fn main() {
     register_element_groups(&element_manager);
 
     loop {
+        clear_background(BLACK);
+
         root_ui().push_skin(&skin);
         game_properties.left_mouse_down = if is_mouse_button_down(MouseButton::Left) {
             true
@@ -120,34 +133,47 @@ async fn main() {
 
         // use parallel iterator to speed up rendering
 
-        image
-            .get_image_data_mut()
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(idx, pixel)| {
-                let x = idx % w as usize;
-                let y = idx / w as usize;
-                let particle = world.get_particle(x as i32, y as i32);
+        if game_properties.render_mode == RenderMode::Heat {
+            // draw temperature map of World environment
+            for x in 0..w as u32 {
+                for y in 0..h as u32 {
+                    let temp = world.get_temperature(x as i32, y as i32);
+                    let part_temp = world.get_particle(x as i32, y as i32).temperature;
+                    let color = temp_to_color(temp + part_temp);
+                    let c = color_u8!(color.0, color.1, color.2, 255);
 
-                let color = particle_to_color(particle).to_rgba8();
+                    image.set_pixel(x, y, c);
+                }
+            }
+        } else {
+            image
+                .get_image_data_mut()
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(idx, pixel)| {
+                    let x = idx % w as usize;
+                    let y = idx / w as usize;
+                    let particle = world.get_particle(x as i32, y as i32);
 
-                *pixel = [color.0, color.1, color.2, 255];
-            });
+                    let color = particle_to_color(particle);
+                    *pixel = [color.r, color.g, color.b, 255]
+                });
 
-        /* */
-        if world.cleared {
-            world.reset();
-        } else if !world.modified_indices.is_empty() {
-            // go through modified indices and only update those on the image
-            for idx in world.modified_indices.iter() {
-                let x = idx % w as usize;
-                let y = idx / w as usize;
-                let particle = world.get_particle(x as i32, y as i32);
+            /* */
+            if world.cleared {
+                world.reset();
+            } else if !world.modified_indices.is_empty() {
+                // go through modified indices and only update those on the image
+                for idx in world.modified_indices.iter() {
+                    let x = idx % w as usize;
+                    let y = idx / w as usize;
+                    let particle = world.get_particle(x as i32, y as i32);
 
-                let color = particle_to_color(particle).to_rgba8();
+                    let color = particle_to_color(particle).to_rgba8();
 
-                let c = color_u8!(color.0, color.1, color.2, color.3);
-                image.set_pixel(x as u32, y as u32, c);
+                    let c = color_u8!(color.0, color.1, color.2, color.3);
+                    image.set_pixel(x as u32, y as u32, c);
+                }
             }
         }
 
@@ -220,12 +246,11 @@ async fn main() {
                     .variant
                     == Variant::Empty
                 {
-                    paint_radius(
+                    use_tool(
+                        world_info.properties,
                         &mut world,
                         touch.position.x as i32,
                         touch.position.y as i32,
-                        world_info.properties.tool_type,
-                        world_info.properties.tool_radius as i32,
                     );
                 }
             }
@@ -245,6 +270,25 @@ async fn main() {
             }
         }
 
+        if let Some(key) = get_last_key_pressed() {
+            match key {
+                KeyCode::Key1 => {
+                    game_properties.render_mode = RenderMode::Normal;
+                }
+
+                KeyCode::Key2 => {
+                    game_properties.render_mode = RenderMode::Heat;
+                }
+
+                _ => (),
+            }
+        }
+
+        // CTRL + S to save
+        if is_key_down(KeyCode::LeftControl) && is_key_pressed(KeyCode::S) {
+            world.save();
+        }
+
         texture.update(&image);
         draw_texture_ex(
             &texture,
@@ -261,6 +305,7 @@ async fn main() {
                 ..Default::default()
             },
         );
+        gl_use_default_material();
 
         draw_top_panel(&mut world_info);
         draw_bottom_panel(&mut world_info, &mut game_properties);
@@ -273,10 +318,12 @@ async fn main() {
 }
 
 fn register_element_groups(manager: &ElementManager) {
+    println!("{}", std::mem::size_of::<VariantType>());
     manager.register_group("PWDR", vec![Variant::Sand, Variant::Salt]);
     manager.register_group("FLUID", vec![Variant::Water, Variant::SaltWater]);
     manager.register_group("GAS", vec![Variant::Smoke, Variant::CO2, Variant::WTVP]);
     manager.register_group("EXPV", vec![Variant::Fire]);
+    manager.register_group("SOLID", vec![Variant::Glass]);
     manager.register_group("WALL", vec![Variant::Wall]);
     manager.register_group(
         "PHYS",
@@ -290,4 +337,28 @@ fn register_element_groups(manager: &ElementManager) {
         ],
     );
     manager.register_group("Life", vec![Variant::GOL])
+}
+
+pub fn temp_to_color(temperature: f32) -> (u8, u8, u8) {
+    // heatmap blue to red
+    // 0 to 1
+    // 0 = blue
+    // 1 = red
+
+    let r: f32;
+    let g: f32;
+    let b: f32;
+
+    let temperature = temperature / 100.0;
+    if temperature < 0.5 {
+        r = temperature * 2.0;
+        g = 0.0;
+        b = 1.0 - temperature * 2.0;
+    } else {
+        r = 1.0 - (temperature - 0.5) * 2.0;
+        g = (temperature - 0.5) * 2.0;
+        b = 0.0;
+    }
+
+    ((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
 }

@@ -2,6 +2,12 @@ use std::fmt::Display;
 
 use silica_engine::variant::{Particle, Variant};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+
+pub enum RenderMode {
+    Normal,
+    Heat,
+}
 #[derive(Clone, Copy, Debug)]
 pub struct GameProperties {
     pub tool_radius: f32,
@@ -12,6 +18,8 @@ pub struct GameProperties {
 
     pub left_mouse_down: bool,
     pub right_mouse_down: bool,
+
+    pub render_mode: RenderMode,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -19,9 +27,10 @@ pub enum Property {
     Temperature,
     COOL,
     Pressure,
+    DelWall,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Tool {
     ElementTool(Variant),
     PropertyTool(Property),
@@ -33,6 +42,7 @@ impl Display for Property {
             Property::Temperature => write!(f, "HEAT"),
             Property::COOL => write!(f, "COOL"),
             Property::Pressure => write!(f, "PRSR"),
+            Property::DelWall => write!(f, "DELW"),
         }
     }
 }

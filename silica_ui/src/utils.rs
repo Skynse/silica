@@ -1,7 +1,9 @@
 use ::rand::Rng;
 use macroquad::prelude::*;
 use macroquad::ui::widgets;
-use macroquad::ui::{hash, root_ui, Skin};
+use macroquad::ui::{hash, root_ui};
+
+
 
 use silica_engine::{group::ElementManager, variant::Variant, world::World};
 
@@ -59,7 +61,7 @@ pub fn draw_tool_outline(world_info: &mut WorldInfo) {
 }
 
 pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
-    let button_size = 30.;
+    let button_size = 50.;
 
     root_ui().window(
         hash!(),
@@ -72,16 +74,30 @@ pub fn draw_element_list(manager: &ElementManager, world_info: &mut WorldInfo) {
                 .unwrap();
             let elements = group.get_elements();
             let mut x = 0.0;
-            for element in elements {
-                let button = widgets::Button::new(element.get_name())
-                    .position(vec2(x, 0.0))
-                    .size(vec2(100.0, 30.))
+            let y = 0.0;
+            for e in elements {
+                let button = widgets::Button::new(e.get_name())
+                    .position(vec2(x, y))
+                    .size(vec2(button_size, button_size))
+                    .selected(world_info.properties.tool_type == Tool::ElementTool(e))
                     .ui(ui);
 
-                if button {
-                    world_info.properties.tool_type = Tool::ElementTool(element);
+                if world_info.properties.tool_type == Tool::ElementTool(e) {
+                    draw_rectangle_lines(
+                        x,
+                        screen_height() - UI_OFFSET_Y + 30.0,
+                        button_size,
+                        button_size,
+                        5.0,
+                        Color::new(1.0, 0., 0., 1.0),
+                    );
                 }
-                x += 100.0;
+
+                // COLOR button
+                if button {
+                    world_info.properties.tool_type = Tool::ElementTool(e);
+                }
+                x += button_size;
             }
         },
     );
@@ -92,12 +108,12 @@ pub fn draw_bottom_panel(world_info: &mut WorldInfo, _gameprops: &mut GameProper
     // draw right above the element panel
 
     let panel_height = 30.0; // Adjust the height of the top panel as needed
-    let button_width: f32 = 30.0;
+    let button_width: f32 = 50.0;
     // draw some buttons for the three tools, selectable too
 
     root_ui().window(
         hash!(),
-        vec2(0.0, screen_height() - panel_height - 30.),
+        vec2(0.0, screen_height() - UI_OFFSET_Y - 30.),
         vec2(screen_width(), panel_height + 30.),
         |ui| {
             let mut x = 0.0;
@@ -105,6 +121,7 @@ pub fn draw_bottom_panel(world_info: &mut WorldInfo, _gameprops: &mut GameProper
             for p in TOOLS {
                 let button = widgets::Button::new(p.to_string())
                     .position(vec2(x, y))
+                    .selected(world_info.properties.tool_type == Tool::PropertyTool(p))
                     .size(vec2(button_width, panel_height))
                     .ui(ui);
                 if button {
@@ -119,6 +136,10 @@ pub fn draw_bottom_panel(world_info: &mut WorldInfo, _gameprops: &mut GameProper
                         Property::Pressure => {
                             world_info.properties.tool_type =
                                 Tool::PropertyTool(Property::Pressure);
+                        }
+
+                        Property::DelWall => {
+                            world_info.properties.tool_type = Tool::PropertyTool(Property::DelWall);
                         }
                     }
                 }
@@ -156,7 +177,14 @@ pub fn draw_top_panel(world_info: &mut WorldInfo) {
         None => "None".to_string(),
     };
     draw_text(
-        &format!("{:?}", world_info.properties.hovering_over.variant),
+        &format!(
+            "{:?}",
+            world_info
+                .properties
+                .hovering_over
+                .variant_type
+                .source_variant
+        ),
         screen_width() - 200.0 - 200.,
         20.0,
         30.0,
@@ -197,10 +225,9 @@ pub fn paint_radius(world: &mut World, x: i32, y: i32, variant: Variant, radius:
             if distance_squared < radius_squared {
                 let particle_x = center_x + dx as f32;
                 let particle_y = center_y + dy as f32;
-                let probability_to_draw = ::rand::thread_rng().gen_range(0..100);
-                if probability_to_draw < 50 && variant != Variant::Wall {
-                    continue;
-                }
+
+                let _probability_to_draw = ::rand::thread_rng().gen_range(0..100);
+
                 world.set_particle(particle_x as i32, particle_y as i32, variant);
             }
         }
@@ -266,6 +293,11 @@ pub fn use_tool(props: GameProperties, world: &mut World, x: i32, y: i32) {
                     }
                 }
             }
+
+            Property::DelWall => {
+                let radius: i32 = props.tool_radius as i32;
+                erase_indestructible(world, x, y, radius);
+            }
         },
     }
 }
@@ -275,6 +307,16 @@ pub fn erase_radius(world: &mut World, x: i32, y: i32, radius: i32) {
         for dy in -radius..radius {
             if dx * dx + dy * dy < radius * radius {
                 world.set_particle(x + dx, y + dy, Variant::Empty);
+            }
+        }
+    }
+}
+
+pub fn erase_indestructible(world: &mut World, x: i32, y: i32, radius: i32) {
+    for dx in -radius..radius {
+        for dy in -radius..radius {
+            if dx * dx + dy * dy < radius * radius {
+                world.erase_indestructible(dx + x, dy + y);
             }
         }
     }
