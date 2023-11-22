@@ -20,6 +20,9 @@ pub struct GameProperties {
     pub right_mouse_down: bool,
 
     pub render_mode: RenderMode,
+    pub requested_exit: bool,
+    pub requested_save: bool,
+    pub requested_load: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -64,7 +67,7 @@ impl Tool {
 }
 
 pub struct WorldInfo {
-    pub fps: i32,
+    pub fps: f32,
     pub properties: GameProperties,
     pub world_width: usize,
     pub world_height: usize,

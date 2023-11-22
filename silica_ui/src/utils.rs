@@ -1,12 +1,12 @@
 use ::rand::Rng;
+use macroquad::miniquad::window::cancel_quit;
 use macroquad::prelude::*;
 use macroquad::ui::widgets;
 use macroquad::ui::{hash, root_ui};
 
-
-
 use silica_engine::{group::ElementManager, variant::Variant, world::World};
 
+use crate::data::get_save_dir;
 use crate::manager::{GameProperties, Property, Tool, WorldInfo};
 use crate::{TOOLS, UI_OFFSET_X, UI_OFFSET_Y};
 
@@ -321,3 +321,43 @@ pub fn erase_indestructible(world: &mut World, x: i32, y: i32, radius: i32) {
         }
     }
 }
+
+pub fn draw_confirm_exit(mut props: GameProperties) {
+    root_ui().window(
+        hash!(),
+        vec2(screen_width() / 2.0 - 100.0, screen_height() / 2.0 - 50.0),
+        vec2(200.0, 100.0),
+        |ui| {
+            widgets::Label::new("Are you sure you want to exit?")
+                .position(vec2(0.0, 0.0))
+                .size(vec2(200.0, 50.0))
+                .ui(ui);
+
+            if widgets::Button::new("Yes")
+                .position(vec2(0.0, 50.0))
+                .size(vec2(100.0, 50.0))
+                .ui(ui)
+            {
+                std::process::exit(0);
+            }
+
+            if widgets::Button::new("No")
+                .position(vec2(100.0, 50.0))
+                .size(vec2(100.0, 50.0))
+                .ui(ui)
+            {
+                props.requested_exit = false;
+            }
+        },
+    );
+}
+
+struct OpenDialog {
+    open: bool,
+    path: String,
+}
+
+// open dialog shows a list of files in the save directory
+// on top is a text box to enter a new filename to filter the list
+// the contents of this box will be the images representing the png saves
+// for this we will have to create textures from the pngs using macroquad
