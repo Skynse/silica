@@ -294,11 +294,7 @@ async fn main() {
         }
 
         if is_key_pressed(KeyCode::Space) {
-            if world.running {
-                world.pause();
-            } else {
-                world.resume();
-            }
+            world.running = !world.running;
         }
 
         if let Some(key) = get_last_key_pressed() {
@@ -350,8 +346,8 @@ async fn main() {
                     // filter through the files and list them so that we can click on one
                     let mut save_dir = get_save_dir();
                     save_dir.push(&filter_name);
-                    let mut x = 0;
-                    let mut y = 0;
+                    let mut x: f32 = 0.;
+                    let mut y: f32 = 0.;
 
                     // iterate through the save dir, by index, so we can get the image by index
                     if let Ok(dir) = std::fs::read_dir(save_dir) {
@@ -365,14 +361,15 @@ async fn main() {
                                     // draw the image
                                     let img = load_img(path.to_str().unwrap());
                                     // we need to resize the image to 1/4 of the original size
-                                    let img_width = img.width() / 4;
-                                    let img_height = img.height() / 4;
+                                    let img_width = img.width() / 8;
+                                    let img_height = img.height() / 8;
                                     let img_texture = Texture2D::from_image(&img);
-                                    img_texture.set_filter(FilterMode::Nearest);
+                                    img_texture.set_filter(FilterMode::Linear);
                                     draw_texture_ex(
                                         &img_texture,
                                         screen_width() / 2.0 - dialog_width / 2.0 + x as f32,
-                                        screen_height() / 2.0 - dialog_height / 2.0 + y as f32,
+                                        30. + screen_height() / 2.0 - dialog_height / 2.0
+                                            + y as f32,
                                         WHITE,
                                         DrawTextureParams {
                                             dest_size: Some(vec2(
@@ -385,10 +382,19 @@ async fn main() {
 
                                     // check if the image is clicked
                                     if is_mouse_button_pressed(MouseButton::Left)
-                                        && mouse_x > x
-                                        && mouse_x < x + img_width as usize
-                                        && mouse_y > y
-                                        && mouse_y < y + img_height as usize
+                                        && mouse_position().0
+                                            > screen_width() / 2.0 - dialog_width / 2.0 + x as f32
+                                        && mouse_position().0
+                                            < screen_width() / 2.0 - dialog_width / 2.0
+                                                + x as f32
+                                                + img_width as f32
+                                        && mouse_position().1
+                                            > 30. + screen_height() / 2.0 - dialog_height / 2.0
+                                                + y as f32
+                                        && mouse_position().1
+                                            < 30. + screen_height() / 2.0 - dialog_height / 2.0
+                                                + y as f32
+                                                + img_height as f32
                                     {
                                         // load the image
                                         let mut save_dir = get_save_dir();
@@ -399,10 +405,11 @@ async fn main() {
                                     }
 
                                     // increment x and y
-                                    x += img_width as usize + 10;
-                                    if x > dialog_width as usize - 100 {
-                                        x = 0;
-                                        y += img_height as usize + 10;
+                                    if x + img_width as f32 > dialog_width {
+                                        y += img_height as f32;
+                                        x = 0.;
+                                    } else {
+                                        x += img_width as f32;
                                     }
                                 }
                             }
@@ -484,21 +491,23 @@ async fn main() {
         }
 
         texture.update(&image);
-        draw_texture_ex(
-            &texture,
-            0.,
-            0.,
-            WHITE,
-            DrawTextureParams {
-                dest_size: Some(vec2(
-                    screen_width() - UI_OFFSET_X,
-                    screen_height() - UI_OFFSET_Y, //ADJUST BASED ON BUTTON SIZE,
-                )),
-                source: Some(Rect::new(0.0, 0.0, w as f32, h as f32)),
+        if can_draw {
+            draw_texture_ex(
+                &texture,
+                0.,
+                0.,
+                WHITE,
+                DrawTextureParams {
+                    dest_size: Some(vec2(
+                        screen_width() - UI_OFFSET_X,
+                        screen_height() - UI_OFFSET_Y, //ADJUST BASED ON BUTTON SIZE,
+                    )),
+                    source: Some(Rect::new(0.0, 0.0, w as f32, h as f32)),
 
-                ..Default::default()
-            },
-        );
+                    ..Default::default()
+                },
+            );
+        }
         gl_use_default_material();
 
         draw_top_panel(&mut world_info);
@@ -520,7 +529,6 @@ async fn main() {
 }
 
 fn register_element_groups(manager: &ElementManager) {
-    println!("{}", std::mem::size_of::<World>());
     manager.register_group("PWDR", vec![Variant::Sand, Variant::Salt]);
     manager.register_group("FLUID", vec![Variant::Water, Variant::SaltWater]);
     manager.register_group("GAS", vec![Variant::Smoke, Variant::CO2, Variant::WTVP]);
@@ -542,27 +550,31 @@ fn register_element_groups(manager: &ElementManager) {
 }
 
 pub fn temp_to_color(temperature: f32) -> (u8, u8, u8) {
-    // heatmap blue to red
-    // 0 to 1
-    // 0 = blue
-    // 1 = red
+    // red is hottest, blue is coldest. Use gradient
 
-    let r: f32;
-    let g: f32;
-    let b: f32;
-
-    let temperature = temperature / 100.0;
-    if temperature < 0.5 {
-        r = temperature * 2.0;
-        g = 0.0;
-        b = 1.0 - temperature * 2.0;
+    let mut color = (0, 0, 0);
+    if temperature < 0.0 {
+        color = (0, 0, 255);
+    } else if temperature < 100.0 {
+        // blue to green
+        let blue = 255 - (temperature / 100.0 * 255.0) as u8;
+        let green = (temperature / 100.0 * 255.0) as u8;
+        color = (0, green, blue);
+    } else if temperature < 200.0 {
+        // green to yellow
+        let green = 255 - ((temperature - 100.0) / 100.0 * 255.0) as u8;
+        let red = ((temperature - 100.0) / 100.0 * 255.0) as u8;
+        color = (red, green, 0);
+    } else if temperature < 300.0 {
+        // yellow to red
+        let red = 255 - ((temperature - 200.0) / 100.0 * 255.0) as u8;
+        let green = ((temperature - 200.0) / 100.0 * 255.0) as u8;
+        color = (red, green, 0);
     } else {
-        r = 1.0 - (temperature - 0.5) * 2.0;
-        g = (temperature - 0.5) * 2.0;
-        b = 0.0;
+        color = (255, 0, 0);
     }
 
-    ((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
+    color
 }
 
 pub fn load_img(path: &str) -> Image {
