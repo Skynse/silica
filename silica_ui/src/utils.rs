@@ -7,7 +7,7 @@ use macroquad::ui::{hash, root_ui};
 use silica_engine::{group::ElementManager, variant::Variant, world::World};
 
 use crate::data::get_save_dir;
-use crate::manager::{GameProperties, Property, Tool, WorldInfo};
+use crate::manager::{GameProperties, Property, RenderMode, Tool, WorldInfo};
 use crate::{TOOLS, UI_OFFSET_X, UI_OFFSET_Y};
 
 pub fn draw_walls(world: &mut World) {
@@ -137,9 +137,11 @@ pub fn draw_bottom_panel(world_info: &mut WorldInfo, _gameprops: &mut GameProper
                             world_info.properties.tool_type =
                                 Tool::PropertyTool(Property::Pressure);
                         }
-
                         Property::DelWall => {
                             world_info.properties.tool_type = Tool::PropertyTool(Property::DelWall);
+                        }
+                        Property::Wind => {
+                            world_info.properties.tool_type = Tool::PropertyTool(Property::Wind);
                         }
                     }
                 }
@@ -293,10 +295,86 @@ pub fn use_tool(props: GameProperties, world: &mut World, x: i32, y: i32) {
                     }
                 }
             }
-
             Property::DelWall => {
                 let radius: i32 = props.tool_radius as i32;
                 erase_indestructible(world, x, y, radius);
+            }
+            Property::Wind => {
+                // Wind direction options based on keyboard modifiers
+                let (base_dx, base_dy) = if is_key_down(KeyCode::LeftShift) {
+                    // Left shift: Strong vertical wind (upward)
+                    (0, -8)
+                } else if is_key_down(KeyCode::LeftControl) {
+                    // Left control: Strong vertical wind (downward)
+                    (0, 8)
+                } else if is_key_down(KeyCode::LeftAlt) {
+                    // Left alt: Wind blowing leftward
+                    (-8, 0)
+                } else {
+                    // Default: Wind blowing rightward
+                    (8, 0)
+                };
+
+                // Allow diagonal winds with modifier combinations
+                let (wind_dx, wind_dy) =
+                    if is_key_down(KeyCode::LeftShift) && is_key_down(KeyCode::LeftAlt) {
+                        // Up-left diagonal
+                        (-6, -6)
+                    } else if is_key_down(KeyCode::LeftShift) && is_key_down(KeyCode::RightAlt) {
+                        // Up-right diagonal
+                        (6, -6)
+                    } else if is_key_down(KeyCode::LeftControl) && is_key_down(KeyCode::LeftAlt) {
+                        // Down-left diagonal
+                        (-6, 6)
+                    } else if is_key_down(KeyCode::LeftControl) && is_key_down(KeyCode::RightAlt) {
+                        // Down-right diagonal
+                        (6, 6)
+                    } else {
+                        // Use the base direction
+                        (base_dx, base_dy)
+                    };
+
+                // Apply wind in a radius around the cursor
+                let radius: i32 = props.tool_radius as i32;                // Create a directional wind pattern
+                let width = radius * 2;
+                let height = radius * 2;                // Scale strength based on radius for more consistent effects at different tool sizes
+                let strength = 2.5 + (radius as f32 * 0.025).min(0.5); // Dynamic strength based on tool size
+                // Generate directional wind around the cursor
+                world.generate_directional_wind(
+                    x - radius,
+                    y - radius,
+                    width,
+                    height,
+                    wind_dx,
+                    wind_dy,
+                    strength,
+                );                // Also add some local wind at the cursor position for immediate effect
+                let local_radius = (radius / 3).max(4); // Scale with tool size but keep a minimum
+                for dx in -local_radius..local_radius+1 {
+                    for dy in -local_radius..local_radius+1 {
+                        let distance = (dx * dx + dy * dy) as f32;
+                        let max_distance = (local_radius * local_radius) as f32;
+                        if distance <= max_distance { // Scale with tool radius
+                            // Create a sharper falloff near the center for more focused effect
+                            let intensity = 1.0 - (distance / max_distance).powf(0.75); // More concentrated in center
+                            let scaled_dx = (wind_dx as f32 * intensity * strength * 3.5) as i8; // Increased multiplier further
+                            let scaled_dy = (wind_dy as f32 * intensity * strength * 3.5) as i8;
+                            world.add_wind(x + dx, y + dy, scaled_dx, scaled_dy);
+                        }
+                    }
+                }
+
+                // Draw wind direction indicator at cursor position
+                // Use a different color based on the render mode
+                let color = if props.render_mode == RenderMode::Wind {
+                    // Brighter color in Wind visualization mode
+                    Color::new(0.4, 0.9, 1.0, 0.9)
+                } else {
+                    // Default color in other modes
+                    Color::new(0.2, 0.8, 1.0, 0.8)
+                };
+
+                draw_wind_indicator_with_color(x as f32, y as f32, wind_dx, wind_dy, color);
             }
         },
     }
@@ -352,12 +430,42 @@ pub fn draw_confirm_exit(mut props: GameProperties) {
     );
 }
 
-struct OpenDialog {
-    open: bool,
-    path: String,
+// Wind indicator function to visualize wind direction
+pub fn draw_wind_indicator(x: f32, y: f32, dx: i8, dy: i8) {
+    draw_wind_indicator_with_color(x, y, dx, dy, Color::new(0.2, 0.8, 1.0, 0.8));
 }
 
-// open dialog shows a list of files in the save directory
-// on top is a text box to enter a new filename to filter the list
-// the contents of this box will be the images representing the png saves
-// for this we will have to create textures from the pngs using macroquad
+// Wind indicator function to visualize wind direction with custom color
+pub fn draw_wind_indicator_with_color(x: f32, y: f32, dx: i8, dy: i8, color: Color) {
+    // Draw an arrow to indicate wind direction
+    let arrow_length = 20.0;
+    let arrow_width = 6.0;
+
+    if dx == 0 && dy == 0 {
+        return; // No wind to visualize
+    }
+
+    // Draw the main line
+    let end_x = x + (dx as f32 * arrow_length);
+    let end_y = y + (dy as f32 * arrow_length);
+
+    draw_line(x, y, end_x, end_y, 2.0, color);
+
+    // Calculate arrow head points
+    let angle = (dy as f32).atan2(dx as f32);
+    let angle1 = angle + 0.5; // First arrow head angle
+    let angle2 = angle - 0.5; // Second arrow head angle
+
+    let head_x1 = end_x - arrow_width * angle1.cos();
+    let head_y1 = end_y - arrow_width * angle1.sin();
+    let head_x2 = end_x - arrow_width * angle2.cos();
+    let head_y2 = end_y - arrow_width * angle2.sin();
+
+    // Draw arrow head
+    draw_triangle(
+        Vec2::new(end_x, end_y),
+        Vec2::new(head_x1, head_y1),
+        Vec2::new(head_x2, head_y2),
+        color,
+    );
+}

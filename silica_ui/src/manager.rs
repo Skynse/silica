@@ -1,12 +1,14 @@
 use std::fmt::Display;
 
 use silica_engine::variant::{Particle, Variant};
+use silica_engine::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 
 pub enum RenderMode {
     Normal,
     Heat,
+    Wind,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct GameProperties {
@@ -31,6 +33,7 @@ pub enum Property {
     COOL,
     Pressure,
     DelWall,
+    Wind,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -46,6 +49,7 @@ impl Display for Property {
             Property::COOL => write!(f, "COOL"),
             Property::Pressure => write!(f, "PRSR"),
             Property::DelWall => write!(f, "DELW"),
+            Property::Wind => write!(f, "WIND"),
         }
     }
 }
